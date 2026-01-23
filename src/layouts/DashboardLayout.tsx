@@ -27,11 +27,13 @@ const routeNames: Record<string, string> = {
   "/warehouse/packaging": "Saldo Opakowań",
   "/production": "Produkcja",
   "/production/orders": "Zlecenia",
+  "/production/analytics": "Analiza przepływu",
   "/production/terminal": "Terminal Wagowy",
   "/production/tumbler": "Terminal Masowni",
   "/production/palletization": "Paletyzacja",
   "/shipping": "Wysyłki",
   "/settings": "Ustawienia",
+  "/settings/locations": "Lokalizacje",
 };
 
 export function DashboardLayout() {
