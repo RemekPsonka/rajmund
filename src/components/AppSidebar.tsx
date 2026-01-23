@@ -8,6 +8,8 @@ import {
   Package,
   FileInput,
   Layers,
+  ClipboardList,
+  Scale,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -40,6 +42,11 @@ const catalogItems = [
 const warehouseItems = [
   { title: "Przyjęcia (PZ)", url: "/warehouse/deliveries", icon: FileInput },
   { title: "Ewidencja Partii", url: "/warehouse/batches", icon: Layers },
+];
+
+const productionItems = [
+  { title: "Zlecenia", url: "/production/orders", icon: ClipboardList },
+  { title: "Terminal Wagowy", url: "/production/terminal", icon: Scale },
 ];
 
 const hrItems = [
@@ -161,6 +168,32 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {warehouseItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive(item.url)}
+                    tooltip={item.title}
+                  >
+                    <NavLink to={item.url}>
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                      {!collapsed && <ChevronRight className="ml-auto h-3 w-3 opacity-50" />}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Production Section */}
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-sidebar-foreground/60 text-xs uppercase tracking-wider">
+            Produkcja (MES)
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {productionItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
