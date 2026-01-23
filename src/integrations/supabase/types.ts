@@ -1198,6 +1198,10 @@ export type Database = {
       }
       is_authenticated: { Args: never; Returns: boolean }
       is_global_admin: { Args: { _user_id: string }; Returns: boolean }
+      make_user_global_admin: {
+        Args: { user_email: string }
+        Returns: undefined
+      }
       simulate_full_production_day: { Args: never; Returns: Json }
     }
     Enums: {
