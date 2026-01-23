@@ -398,6 +398,70 @@ export type Database = {
           },
         ]
       }
+      t_packaging_transactions: {
+        Row: {
+          comments: string | null
+          company_id: string
+          contractor_id: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          packaging_type: string
+          quantity: number
+          shipment_id: string | null
+          transaction_date: string | null
+          type: Database["public"]["Enums"]["packaging_transaction_type"]
+        }
+        Insert: {
+          comments?: string | null
+          company_id: string
+          contractor_id: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          packaging_type: string
+          quantity: number
+          shipment_id?: string | null
+          transaction_date?: string | null
+          type: Database["public"]["Enums"]["packaging_transaction_type"]
+        }
+        Update: {
+          comments?: string | null
+          company_id?: string
+          contractor_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          packaging_type?: string
+          quantity?: number
+          shipment_id?: string | null
+          transaction_date?: string | null
+          type?: Database["public"]["Enums"]["packaging_transaction_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "t_packaging_transactions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "t_companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_packaging_transactions_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "t_contractors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_packaging_transactions_shipment_id_fkey"
+            columns: ["shipment_id"]
+            isOneToOne: false
+            referencedRelation: "t_shipments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       t_production_inputs: {
         Row: {
           batch_id: string
@@ -737,6 +801,169 @@ export type Database = {
           },
         ]
       }
+      t_shipment_items: {
+        Row: {
+          batch_id: string | null
+          created_at: string | null
+          handling_unit_id: string | null
+          id: string
+          product_id: string | null
+          quantity: number | null
+          shipment_id: string
+        }
+        Insert: {
+          batch_id?: string | null
+          created_at?: string | null
+          handling_unit_id?: string | null
+          id?: string
+          product_id?: string | null
+          quantity?: number | null
+          shipment_id: string
+        }
+        Update: {
+          batch_id?: string | null
+          created_at?: string | null
+          handling_unit_id?: string | null
+          id?: string
+          product_id?: string | null
+          quantity?: number | null
+          shipment_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "t_shipment_items_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "t_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_shipment_items_handling_unit_id_fkey"
+            columns: ["handling_unit_id"]
+            isOneToOne: false
+            referencedRelation: "t_handling_units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_shipment_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "t_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_shipment_items_shipment_id_fkey"
+            columns: ["shipment_id"]
+            isOneToOne: false
+            referencedRelation: "t_shipments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      t_shipments: {
+        Row: {
+          carrier_id: string | null
+          company_id: string
+          created_at: string | null
+          created_by: string | null
+          customer_id: string | null
+          delivered_date: string | null
+          destination_address_json: Json | null
+          dispatch_date: string | null
+          driver_name: string | null
+          facility_id: string
+          id: string
+          linked_invoice_number: string | null
+          pallets_count: number | null
+          seal_number: string | null
+          shipment_number: string
+          status: Database["public"]["Enums"]["shipment_status"] | null
+          total_gross_weight: number | null
+          total_net_weight: number | null
+          trailer_plates: string | null
+          transport_temperature: number | null
+          truck_plates: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          carrier_id?: string | null
+          company_id: string
+          created_at?: string | null
+          created_by?: string | null
+          customer_id?: string | null
+          delivered_date?: string | null
+          destination_address_json?: Json | null
+          dispatch_date?: string | null
+          driver_name?: string | null
+          facility_id: string
+          id?: string
+          linked_invoice_number?: string | null
+          pallets_count?: number | null
+          seal_number?: string | null
+          shipment_number: string
+          status?: Database["public"]["Enums"]["shipment_status"] | null
+          total_gross_weight?: number | null
+          total_net_weight?: number | null
+          trailer_plates?: string | null
+          transport_temperature?: number | null
+          truck_plates?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          carrier_id?: string | null
+          company_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          customer_id?: string | null
+          delivered_date?: string | null
+          destination_address_json?: Json | null
+          dispatch_date?: string | null
+          driver_name?: string | null
+          facility_id?: string
+          id?: string
+          linked_invoice_number?: string | null
+          pallets_count?: number | null
+          seal_number?: string | null
+          shipment_number?: string
+          status?: Database["public"]["Enums"]["shipment_status"] | null
+          total_gross_weight?: number | null
+          total_net_weight?: number | null
+          trailer_plates?: string | null
+          transport_temperature?: number | null
+          truck_plates?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "t_shipments_carrier_id_fkey"
+            columns: ["carrier_id"]
+            isOneToOne: false
+            referencedRelation: "t_contractors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_shipments_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "t_companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_shipments_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "t_contractors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_shipments_facility_id_fkey"
+            columns: ["facility_id"]
+            isOneToOne: false
+            referencedRelation: "t_facilities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       t_user_roles: {
         Row: {
           company_id: string | null
@@ -945,7 +1172,15 @@ export type Database = {
         }
         Returns: string
       }
+      generate_shipment_number: {
+        Args: { p_company_id: string }
+        Returns: string
+      }
       generate_sscc_number: { Args: { p_company_id: string }; Returns: string }
+      get_packaging_balance: {
+        Args: { p_contractor_id: string; p_packaging_type: string }
+        Returns: number
+      }
       has_company_access: {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
@@ -969,8 +1204,10 @@ export type Database = {
       contract_type: "B2B" | "UoP" | "Mandate" | "Other"
       document_status: "Draft" | "Approved" | "Cancelled"
       facility_type: "Plant" | "Warehouse" | "Office" | "Store"
+      packaging_transaction_type: "Issued" | "Received"
       production_order_status: "Open" | "Closed" | "Cancelled"
       production_order_type: "Decomposition" | "Processing" | "Packing"
+      shipment_status: "Planning" | "Loading" | "Shipped" | "Delivered"
       warehouse_doc_type: "PZ" | "WZ" | "MM" | "RW" | "PW"
     }
     CompositeTypes: {
@@ -1104,8 +1341,10 @@ export const Constants = {
       contract_type: ["B2B", "UoP", "Mandate", "Other"],
       document_status: ["Draft", "Approved", "Cancelled"],
       facility_type: ["Plant", "Warehouse", "Office", "Store"],
+      packaging_transaction_type: ["Issued", "Received"],
       production_order_status: ["Open", "Closed", "Cancelled"],
       production_order_type: ["Decomposition", "Processing", "Packing"],
+      shipment_status: ["Planning", "Loading", "Shipped", "Delivered"],
       warehouse_doc_type: ["PZ", "WZ", "MM", "RW", "PW"],
     },
   },
