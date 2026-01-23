@@ -307,12 +307,15 @@ export default function WeighingTerminalPage() {
 
                 <div className="space-y-2">
                   <Label>Rozbieracz (kto przygotował)</Label>
-                  <Select value={preparingEmployeeId} onValueChange={setPreparingEmployeeId}>
+                  <Select 
+                    value={preparingEmployeeId || "none"} 
+                    onValueChange={(v) => setPreparingEmployeeId(v === "none" ? "" : v)}
+                  >
                     <SelectTrigger className="h-12 text-base">
                       <SelectValue placeholder="Opcjonalne" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">— Nie wybrano —</SelectItem>
+                      <SelectItem value="none">— Nie wybrano —</SelectItem>
                       {employees?.filter(e => e.is_active).map((emp) => (
                         <SelectItem key={emp.id} value={emp.id}>
                           {emp.first_name} {emp.last_name}
