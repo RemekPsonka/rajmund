@@ -166,9 +166,9 @@ export default function StorageLocationsPage() {
             <div className="space-y-2">
               <Label>Spółka</Label>
               <Select
-                value={selectedCompanyId}
+                value={selectedCompanyId || "all"}
                 onValueChange={(value) => {
-                  setSelectedCompanyId(value);
+                  setSelectedCompanyId(value === "all" ? "" : value);
                   setSelectedFacilityId("");
                 }}
               >
@@ -176,7 +176,7 @@ export default function StorageLocationsPage() {
                   <SelectValue placeholder="Wszystkie spółki" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Wszystkie</SelectItem>
+                  <SelectItem value="all">Wszystkie</SelectItem>
                   {companies?.map((company) => (
                     <SelectItem key={company.id} value={company.id}>
                       {company.short_name || company.name}
@@ -188,14 +188,14 @@ export default function StorageLocationsPage() {
             <div className="space-y-2">
               <Label>Zakład</Label>
               <Select
-                value={selectedFacilityId}
-                onValueChange={setSelectedFacilityId}
+                value={selectedFacilityId || "all"}
+                onValueChange={(value) => setSelectedFacilityId(value === "all" ? "" : value)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Wybierz zakład" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Wszystkie</SelectItem>
+                  <SelectItem value="all">Wszystkie</SelectItem>
                   {filteredFacilities?.map((facility) => (
                     <SelectItem key={facility.id} value={facility.id}>
                       {facility.name}
