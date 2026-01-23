@@ -19,6 +19,7 @@ import {
   ArrowRightLeft,
   Boxes,
   MapPin,
+  GitBranch,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -59,6 +60,7 @@ const warehouseItems = [
 
 const productionItems = [
   { title: "Zlecenia", url: "/production/orders", icon: ClipboardList },
+  { title: "Analiza przepływu", url: "/production/analytics", icon: GitBranch },
   { title: "Terminal Wagowy", url: "/production/terminal", icon: Scale },
   { title: "Terminal Masowni", url: "/production/tumbler", icon: Cog },
   { title: "Paletyzacja", url: "/production/palletization", icon: PackageCheck },
