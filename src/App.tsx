@@ -19,6 +19,7 @@ import PalletizationPage from "./pages/production/PalletizationPage";
 import ShipmentsPage from "./pages/shipping/ShipmentsPage";
 import ShipmentDetailPage from "./pages/shipping/ShipmentDetailPage";
 import DevToolsPage from "./pages/dev/DevToolsPage";
+import SystemHealthPage from "./pages/dev/SystemHealthPage";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 
@@ -45,6 +46,7 @@ const App = () => (
             <Route path="/shipping" element={<ShipmentsPage />} />
             <Route path="/shipping/:id" element={<ShipmentDetailPage />} />
             <Route path="/dev-tools" element={<DevToolsPage />} />
+            <Route path="/system-health" element={<SystemHealthPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
           {/* Terminals without layout - full screen */}

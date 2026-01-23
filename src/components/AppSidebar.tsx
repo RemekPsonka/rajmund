@@ -14,6 +14,7 @@ import {
   PackageCheck,
   Truck,
   FlaskConical,
+  HeartPulse,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -65,6 +66,7 @@ const hrItems = [
 
 const devItems = [
   { title: "DEV TOOLS", url: "/dev-tools", icon: FlaskConical },
+  { title: "System Health", url: "/system-health", icon: HeartPulse },
 ];
 
 const settingsItems = [
