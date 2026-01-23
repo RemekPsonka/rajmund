@@ -14,6 +14,7 @@ import {
   AlertCircle,
   Edit,
   Save,
+  Scale,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -58,6 +59,7 @@ import {
   useAddPackagingTransaction,
   useAvailablePallets,
   useFindPalletBySSCC,
+  useVerifyItemWeight,
   type ShipmentStatus,
 } from "@/hooks/useShipments";
 import { useBatches } from "@/hooks/useBatches";
@@ -86,6 +88,8 @@ export default function ShipmentDetailPage() {
   const [editTrailerPlates, setEditTrailerPlates] = useState("");
   const [editTemperature, setEditTemperature] = useState("");
   const [editSealNumber, setEditSealNumber] = useState("");
+  const [verifyingItemId, setVerifyingItemId] = useState<string | null>(null);
+  const [verifyWeight, setVerifyWeight] = useState("");
 
   // Queries
   const { data: shipment, isLoading } = useShipment(id);
@@ -101,6 +105,7 @@ export default function ShipmentDetailPage() {
   const removeItem = useRemoveShipmentItem();
   const addPackaging = useAddPackagingTransaction();
   const findPallet = useFindPalletBySSCC();
+  const verifyItem = useVerifyItemWeight();
 
   // Handlers
   const handleScan = useCallback(async () => {
@@ -146,8 +151,30 @@ export default function ShipmentDetailPage() {
     setPackagingQty("0");
   };
 
+  const handleVerifyWeight = async (itemId: string) => {
+    if (!id || !verifyWeight) return;
+    const weight = parseFloat(verifyWeight);
+    if (isNaN(weight) || weight <= 0) {
+      toast.error("Podaj prawidłową wagę");
+      return;
+    }
+    await verifyItem.mutateAsync({ itemId, shipmentId: id, verifiedWeight: weight });
+    setVerifyingItemId(null);
+    setVerifyWeight("");
+  };
+
   const handleUpdateStatus = async (status: ShipmentStatus) => {
     if (!id) return;
+    
+    // Check if all items are verified before shipping
+    if (status === "Shipped" && items && items.length > 0) {
+      const unverifiedItems = items.filter(item => item.verified_weight === null);
+      if (unverifiedItems.length > 0) {
+        toast.error(`Zweryfikuj wagę wszystkich pozycji przed wysyłką (${unverifiedItems.length} niezweryfikowanych)`);
+        return;
+      }
+    }
+    
     await updateShipment.mutateAsync({ id, status });
   };
 
@@ -405,43 +432,91 @@ export default function ShipmentDetailPage() {
                       <TableHead>Nr Palety / Partii</TableHead>
                       <TableHead>Produkt</TableHead>
                       <TableHead className="text-right">Sztuk</TableHead>
-                      <TableHead className="text-right">Waga netto</TableHead>
-                      <TableHead className="w-12"></TableHead>
+                      <TableHead className="text-right">Waga dekl.</TableHead>
+                      <TableHead className="text-right">Waga zweryfikowana</TableHead>
+                      <TableHead className="w-24"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {items?.map((item, idx) => (
-                      <TableRow key={item.id}>
-                        <TableCell>{idx + 1}</TableCell>
-                        <TableCell className="font-mono">
-                          {item.handling_unit?.sscc_number ||
-                            item.batch?.internal_batch_number ||
-                            "-"}
-                        </TableCell>
-                        <TableCell>{item.product?.name || "Paleta"}</TableCell>
-                        <TableCell className="text-right">
-                          {item.handling_unit?.items_count || 1}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {(
-                            item.handling_unit?.total_net_weight ||
-                            item.quantity ||
-                            0
-                          ).toFixed(2)}{" "}
-                          kg
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-destructive"
-                            onClick={() => handleRemoveItem(item.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {items?.map((item, idx) => {
+                      const declaredWeight = item.handling_unit?.total_net_weight || item.quantity || 0;
+                      const isVerified = item.verified_weight !== null;
+                      const weightDiff = isVerified ? Math.abs(((item.verified_weight! - declaredWeight) / declaredWeight) * 100) : 0;
+                      const hasDifference = isVerified && weightDiff > 2;
+                      
+                      return (
+                        <TableRow key={item.id} className={hasDifference ? "bg-destructive/10" : ""}>
+                          <TableCell>{idx + 1}</TableCell>
+                          <TableCell className="font-mono">
+                            {item.handling_unit?.sscc_number ||
+                              item.batch?.internal_batch_number ||
+                              "-"}
+                          </TableCell>
+                          <TableCell>{item.product?.name || "Paleta"}</TableCell>
+                          <TableCell className="text-right">
+                            {item.handling_unit?.items_count || 1}
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            {declaredWeight.toFixed(2)} kg
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {verifyingItemId === item.id ? (
+                              <div className="flex items-center gap-2 justify-end">
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  className="w-24 h-8 text-right font-mono"
+                                  placeholder="kg"
+                                  value={verifyWeight}
+                                  onChange={(e) => setVerifyWeight(e.target.value)}
+                                  onKeyDown={(e) => e.key === "Enter" && handleVerifyWeight(item.id)}
+                                  autoFocus
+                                />
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleVerifyWeight(item.id)}
+                                >
+                                  <Check className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ) : isVerified ? (
+                              <span className={`font-mono ${hasDifference ? "text-destructive font-bold" : "text-green-600"}`}>
+                                {item.verified_weight!.toFixed(2)} kg
+                                {hasDifference && (
+                                  <span className="ml-1 text-xs">
+                                    ({weightDiff > 0 ? "+" : ""}{((item.verified_weight! - declaredWeight) / declaredWeight * 100).toFixed(1)}%)
+                                  </span>
+                                )}
+                              </span>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7"
+                                onClick={() => {
+                                  setVerifyingItemId(item.id);
+                                  setVerifyWeight(declaredWeight.toFixed(2));
+                                }}
+                              >
+                                <Scale className="h-3 w-3 mr-1" />
+                                Zweryfikuj
+                              </Button>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive"
+                              onClick={() => handleRemoveItem(item.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               )}

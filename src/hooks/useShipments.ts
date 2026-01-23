@@ -41,6 +41,9 @@ export interface ShipmentItem {
   batch_id: string | null;
   product_id: string | null;
   quantity: number | null;
+  verified_weight: number | null;
+  verified_at: string | null;
+  verified_by: string | null;
   created_at: string;
   // Joined
   handling_unit?: {
@@ -447,6 +450,37 @@ export function useFindPalletBySSCC() {
       if (error) throw error;
       if (!data) throw new Error("Nie znaleziono palety o podanym SSCC");
       return data;
+    },
+  });
+}
+
+// Verify item weight
+export function useVerifyItemWeight() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ itemId, shipmentId, verifiedWeight }: {
+      itemId: string;
+      shipmentId: string;
+      verifiedWeight: number;
+    }) => {
+      const { error } = await supabase
+        .from("t_shipment_items")
+        .update({
+          verified_weight: verifiedWeight,
+          verified_at: new Date().toISOString(),
+        })
+        .eq("id", itemId);
+
+      if (error) throw error;
+      return shipmentId;
+    },
+    onSuccess: (shipmentId) => {
+      queryClient.invalidateQueries({ queryKey: ["shipment-items", shipmentId] });
+      toast.success("Zweryfikowano wagę");
+    },
+    onError: (error) => {
+      toast.error(`Błąd: ${error.message}`);
     },
   });
 }
