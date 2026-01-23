@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Check, Truck, Package, Plus, Trash2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { toast } from "sonner";
-
+import * as z from "zod";
+import { ArrowLeft, ArrowRight, Plus, Trash2, Package, Boxes, Truck, Check, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import {
   Form,
   FormControl,
@@ -32,40 +32,39 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-
+import { useCompanies } from "@/hooks/useCompanies";
 import { useContractors } from "@/hooks/useContractors";
 import { useFacilities } from "@/hooks/useFacilities";
 import { useProducts } from "@/hooks/useProducts";
-import { useCompanies } from "@/hooks/useCompanies";
-import {
-  useCreateWarehouseMovement,
-  useCreateMovementItem,
-  generateDocumentNumber,
-} from "@/hooks/useWarehouseMovements";
+import { useStorageLocations, getLocationTypeLabel, LocationType } from "@/hooks/useStorageLocations";
+import { useCreateWarehouseMovement, useCreateMovementItem } from "@/hooks/useWarehouseMovements";
 import { useCreateBatch, generateInternalBatchNumber } from "@/hooks/useBatches";
+import { useCreatePackagingTransaction } from "@/hooks/usePackaging";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
-// Step 1 Schema
+// Step 1: Delivery header
 const step1Schema = z.object({
   company_id: z.string().min(1, "Wybierz spółkę"),
+  facility_id: z.string().min(1, "Wybierz zakład"),
   contractor_id: z.string().min(1, "Wybierz dostawcę"),
-  facility_id: z.string().min(1, "Wybierz magazyn"),
-  external_doc_number: z.string().min(1, "Podaj numer HDI"),
-  reception_temp: z.coerce.number().optional(),
+  external_doc_number: z.string().optional(),
   driver_name: z.string().optional(),
   car_plates: z.string().optional(),
+  reception_temp: z.coerce.number().optional(),
+  notes: z.string().optional(),
 });
 
 type Step1FormValues = z.infer<typeof step1Schema>;
 
-// Item Schema
+// Step 2: Item form
 const itemSchema = z.object({
   product_id: z.string().min(1, "Wybierz produkt"),
   quantity: z.coerce.number().min(0.01, "Podaj ilość"),
   supplier_batch_number: z.string().optional(),
   production_date: z.string().optional(),
   expiration_date: z.string().optional(),
+  location_id: z.string().optional(),
 });
 
 type ItemFormValues = z.infer<typeof itemSchema>;
@@ -75,14 +74,32 @@ interface DeliveryItem extends ItemFormValues {
   productName: string;
   productUnit: string;
   internalBatchNumber: string;
+  locationName?: string;
 }
+
+interface PackagingItem {
+  id: string;
+  packaging_type: string;
+  quantity: number;
+}
+
+const PACKAGING_TYPES = [
+  { value: "Paleta EUR", label: "Paleta EUR" },
+  { value: "E2", label: "Pojemnik E2" },
+  { value: "Karton", label: "Karton" },
+];
 
 export default function NewDeliveryPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [items, setItems] = useState<DeliveryItem[]>([]);
+  const [packagingItems, setPackagingItems] = useState<PackagingItem[]>([]);
   const [step1Data, setStep1Data] = useState<Step1FormValues | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Packaging form state
+  const [newPackagingType, setNewPackagingType] = useState("");
+  const [newPackagingQty, setNewPackagingQty] = useState<number>(0);
 
   const { data: companies } = useCompanies();
   const { data: contractors } = useContractors(undefined, { suppliersOnly: true });
@@ -92,6 +109,7 @@ export default function NewDeliveryPage() {
   const createMovement = useCreateWarehouseMovement();
   const createMovementItem = useCreateMovementItem();
   const createBatch = useCreateBatch();
+  const createPackagingTransaction = useCreatePackagingTransaction();
 
   // Step 1 Form
   const step1Form = useForm<Step1FormValues>({
@@ -116,13 +134,18 @@ export default function NewDeliveryPage() {
       supplier_batch_number: "",
       production_date: "",
       expiration_date: "",
+      location_id: "",
     },
   });
 
   const selectedCompanyId = step1Form.watch("company_id");
+  const selectedFacilityId = step1Form.watch("facility_id");
   const filteredFacilities = facilities?.filter((f) => f.company_id === selectedCompanyId);
   const filteredContractors = contractors?.filter((c) => c.company_id === selectedCompanyId);
   const filteredProducts = products?.filter((p) => p.company_id === selectedCompanyId);
+
+  // Fetch storage locations for selected facility
+  const { data: storageLocations } = useStorageLocations(step1Data?.facility_id || selectedFacilityId);
 
   const handleStep1Submit = (data: Step1FormValues) => {
     setStep1Data(data);
@@ -131,6 +154,7 @@ export default function NewDeliveryPage() {
 
   const handleAddItem = (data: ItemFormValues) => {
     const product = products?.find((p) => p.id === data.product_id);
+    const location = storageLocations?.find((l) => l.id === data.location_id);
     if (!product || !step1Data) return;
 
     const internalBatchNumber = generateInternalBatchNumber(
@@ -142,8 +166,9 @@ export default function NewDeliveryPage() {
       ...data,
       id: crypto.randomUUID(),
       productName: product.name,
-      productUnit: product.unit,
+      productUnit: product.unit || "kg",
       internalBatchNumber,
+      locationName: location?.name,
     };
 
     setItems((prev) => [...prev, newItem]);
@@ -154,16 +179,41 @@ export default function NewDeliveryPage() {
     setItems((prev) => prev.filter((item) => item.id !== id));
   };
 
+  const handleAddPackaging = () => {
+    if (!newPackagingType || newPackagingQty <= 0) return;
+    
+    setPackagingItems((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        packaging_type: newPackagingType,
+        quantity: newPackagingQty,
+      },
+    ]);
+    setNewPackagingType("");
+    setNewPackagingQty(0);
+  };
+
+  const handleRemovePackaging = (id: string) => {
+    setPackagingItems((prev) => prev.filter((item) => item.id !== id));
+  };
+
   const handleSubmit = async () => {
     if (!step1Data || items.length === 0) return;
 
     setIsSubmitting(true);
     try {
-      // 1. Create movement document
-      const documentNumber = generateDocumentNumber("PZ");
+      // 1. Generate document number via RPC
+      const { data: docNumber, error: docError } = await supabase.rpc(
+        "generate_document_number",
+        { p_company_id: step1Data.company_id, p_type: "PZ" }
+      );
+      if (docError) throw docError;
+
+      // 2. Create movement document
       const movement = await createMovement.mutateAsync({
         company_id: step1Data.company_id,
-        document_number: documentNumber,
+        document_number: docNumber,
         type: "PZ",
         contractor_id: step1Data.contractor_id,
         facility_id: step1Data.facility_id,
@@ -173,9 +223,9 @@ export default function NewDeliveryPage() {
         car_plates: step1Data.car_plates,
       });
 
-      // 2. Create batches and movement items
+      // 3. Create batches and movement items
       for (const item of items) {
-        // Create batch
+        // Create batch with location
         const batch = await createBatch.mutateAsync({
           product_id: item.product_id,
           internal_batch_number: item.internalBatchNumber,
@@ -187,6 +237,14 @@ export default function NewDeliveryPage() {
           current_quantity: item.quantity,
         });
 
+        // Update batch location if specified
+        if (item.location_id) {
+          await supabase
+            .from("t_batches")
+            .update({ location_id: item.location_id })
+            .eq("id", batch.id);
+        }
+
         // Create movement item
         await createMovementItem.mutateAsync({
           movement_id: movement.id,
@@ -196,7 +254,19 @@ export default function NewDeliveryPage() {
         });
       }
 
-      toast.success(`Dokument ${documentNumber} został utworzony`);
+      // 4. Create packaging transactions (received from driver)
+      for (const pkg of packagingItems) {
+        await createPackagingTransaction.mutateAsync({
+          company_id: step1Data.company_id,
+          contractor_id: step1Data.contractor_id,
+          type: "Received",
+          packaging_type: pkg.packaging_type,
+          quantity: pkg.quantity,
+          comments: `PZ: ${docNumber}`,
+        });
+      }
+
+      toast.success(`Dokument ${docNumber} został utworzony`);
       navigate("/warehouse/deliveries");
     } catch (error) {
       console.error(error);
@@ -238,7 +308,7 @@ export default function NewDeliveryPage() {
 
       {/* Step 1: Header */}
       {step === 1 && (
-        <Card className="shadow-industrial">
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Truck className="h-5 w-5" />
@@ -337,7 +407,7 @@ export default function NewDeliveryPage() {
                     name="external_doc_number"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Numer HDI dostawcy*</FormLabel>
+                        <FormLabel>Numer HDI dostawcy</FormLabel>
                         <FormControl>
                           <Input className="h-12 text-base" placeholder="Np. HDI/2026/001" {...field} />
                         </FormControl>
@@ -407,14 +477,14 @@ export default function NewDeliveryPage() {
       {step === 2 && step1Data && (
         <>
           {/* Summary of Step 1 */}
-          <Card className="shadow-industrial bg-muted/30">
+          <Card className="bg-muted/30">
             <CardContent className="py-4">
               <div className="flex flex-wrap gap-4 text-sm">
                 <Badge variant="outline" className="gap-1">
                   <Truck className="h-3 w-3" />
                   {contractors?.find((c) => c.id === step1Data.contractor_id)?.name}
                 </Badge>
-                <Badge variant="outline">HDI: {step1Data.external_doc_number}</Badge>
+                <Badge variant="outline">HDI: {step1Data.external_doc_number || "—"}</Badge>
                 {step1Data.reception_temp && (
                   <Badge variant="outline">Temp: {step1Data.reception_temp}°C</Badge>
                 )}
@@ -423,7 +493,7 @@ export default function NewDeliveryPage() {
           </Card>
 
           {/* Add Item Form */}
-          <Card className="shadow-industrial">
+          <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Package className="h-5 w-5" />
@@ -433,7 +503,7 @@ export default function NewDeliveryPage() {
             <CardContent>
               <Form {...itemForm}>
                 <form onSubmit={itemForm.handleSubmit(handleAddItem)} className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     <FormField
                       control={itemForm.control}
                       name="product_id"
@@ -449,7 +519,7 @@ export default function NewDeliveryPage() {
                             <SelectContent>
                               {filteredProducts?.map((product) => (
                                 <SelectItem key={product.id} value={product.id}>
-                                  {product.name} ({product.unit})
+                                  {product.name} ({product.unit || "kg"})
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -473,6 +543,36 @@ export default function NewDeliveryPage() {
                       )}
                     />
 
+                    <FormField
+                      control={itemForm.control}
+                      name="location_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Lokalizacja docelowa</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value || ""}>
+                            <FormControl>
+                              <SelectTrigger className="h-12">
+                                <SelectValue placeholder="Wybierz lokalizację" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {storageLocations?.map((loc) => (
+                                <SelectItem key={loc.id} value={loc.id}>
+                                  <div className="flex items-center gap-2">
+                                    <MapPin className="h-3 w-3" />
+                                    {loc.name} ({getLocationTypeLabel(loc.location_type as LocationType)})
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-3">
                     <FormField
                       control={itemForm.control}
                       name="production_date"
@@ -500,21 +600,21 @@ export default function NewDeliveryPage() {
                         </FormItem>
                       )}
                     />
-                  </div>
 
-                  <FormField
-                    control={itemForm.control}
-                    name="supplier_batch_number"
-                    render={({ field }) => (
-                      <FormItem className="max-w-md">
-                        <FormLabel>Nr partii dostawcy</FormLabel>
-                        <FormControl>
-                          <Input className="h-12" placeholder="Opcjonalnie" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                    <FormField
+                      control={itemForm.control}
+                      name="supplier_batch_number"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nr partii dostawcy</FormLabel>
+                          <FormControl>
+                            <Input className="h-12" placeholder="Opcjonalnie" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
 
                   <Button type="submit" variant="secondary" className="gap-2">
                     <Plus className="h-4 w-4" />
@@ -527,7 +627,7 @@ export default function NewDeliveryPage() {
 
           {/* Items Table */}
           {items.length > 0 && (
-            <Card className="shadow-industrial">
+            <Card>
               <CardHeader>
                 <CardTitle>Pozycje dostawy ({items.length})</CardTitle>
               </CardHeader>
@@ -538,9 +638,9 @@ export default function NewDeliveryPage() {
                       <TableHead>Nr partii wewnętrzny</TableHead>
                       <TableHead>Produkt</TableHead>
                       <TableHead className="text-right">Ilość</TableHead>
+                      <TableHead>Lokalizacja</TableHead>
                       <TableHead>Data uboju</TableHead>
                       <TableHead>Data ważności</TableHead>
-                      <TableHead>Nr partii dostawcy</TableHead>
                       <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -556,11 +656,18 @@ export default function NewDeliveryPage() {
                         <TableCell className="text-right font-medium">
                           {item.quantity.toFixed(2)} {item.productUnit}
                         </TableCell>
+                        <TableCell>
+                          {item.locationName ? (
+                            <Badge variant="outline" className="gap-1">
+                              <MapPin className="h-3 w-3" />
+                              {item.locationName}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
                         <TableCell>{item.production_date || "—"}</TableCell>
                         <TableCell>{item.expiration_date || "—"}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {item.supplier_batch_number || "—"}
-                        </TableCell>
                         <TableCell>
                           <Button
                             variant="ghost"
@@ -577,6 +684,81 @@ export default function NewDeliveryPage() {
               </CardContent>
             </Card>
           )}
+
+          {/* Packaging from Driver */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Boxes className="h-5 w-5" />
+                Opakowania od kierowcy
+              </CardTitle>
+              <CardDescription>
+                Wprowadź opakowania zwrotne dostarczone przez kierowcę
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-4 items-end">
+                <div className="flex-1 space-y-2">
+                  <label className="text-sm font-medium">Typ opakowania</label>
+                  <Select value={newPackagingType} onValueChange={setNewPackagingType}>
+                    <SelectTrigger className="h-12">
+                      <SelectValue placeholder="Wybierz typ" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PACKAGING_TYPES.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>
+                          {type.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="w-32 space-y-2">
+                  <label className="text-sm font-medium">Ilość</label>
+                  <Input
+                    type="number"
+                    className="h-12"
+                    value={newPackagingQty || ""}
+                    onChange={(e) => setNewPackagingQty(Number(e.target.value))}
+                    placeholder="0"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-12 gap-2"
+                  onClick={handleAddPackaging}
+                  disabled={!newPackagingType || newPackagingQty <= 0}
+                >
+                  <Plus className="h-4 w-4" />
+                  Dodaj
+                </Button>
+              </div>
+
+              {packagingItems.length > 0 && (
+                <div className="border rounded-lg divide-y">
+                  {packagingItems.map((pkg) => (
+                    <div key={pkg.id} className="flex items-center justify-between p-3">
+                      <div className="flex items-center gap-2">
+                        <Boxes className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{pkg.packaging_type}</span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <Badge variant="secondary">{pkg.quantity} szt.</Badge>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleRemovePackaging(pkg.id)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Actions */}
           <div className="flex justify-between">

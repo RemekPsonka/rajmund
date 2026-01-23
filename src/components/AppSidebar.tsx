@@ -18,6 +18,7 @@ import {
   LogOut,
   ArrowRightLeft,
   Boxes,
+  MapPin,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -77,6 +78,7 @@ const devItems = [
 ];
 
 const settingsItems = [
+  { title: "Lokalizacje", url: "/settings/locations", icon: MapPin },
   { title: "Ustawienia", url: "/settings", icon: Settings },
 ];
 
