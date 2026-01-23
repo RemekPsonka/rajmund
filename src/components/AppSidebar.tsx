@@ -12,6 +12,8 @@ import {
   Scale,
   Cog,
   PackageCheck,
+  Truck,
+  FlaskConical,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -53,8 +55,16 @@ const productionItems = [
   { title: "Paletyzacja", url: "/production/palletization", icon: PackageCheck },
 ];
 
+const shippingItems = [
+  { title: "Wysyłki (WZ)", url: "/shipping", icon: Truck },
+];
+
 const hrItems = [
   { title: "Pracownicy", url: "/employees", icon: Users },
+];
+
+const devItems = [
+  { title: "DEV TOOLS", url: "/dev-tools", icon: FlaskConical },
 ];
 
 const settingsItems = [
@@ -216,6 +226,32 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
+        {/* Shipping Section */}
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-sidebar-foreground/60 text-xs uppercase tracking-wider">
+            Logistyka
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {shippingItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive(item.url)}
+                    tooltip={item.title}
+                  >
+                    <NavLink to={item.url}>
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                      {!collapsed && <ChevronRight className="ml-auto h-3 w-3 opacity-50" />}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
         {/* HR Section */}
         <SidebarGroup>
           <SidebarGroupLabel className="text-sidebar-foreground/60 text-xs uppercase tracking-wider">
@@ -234,6 +270,31 @@ export function AppSidebar() {
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                       {!collapsed && <ChevronRight className="ml-auto h-3 w-3 opacity-50" />}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Dev Tools Section */}
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-sidebar-foreground/60 text-xs uppercase tracking-wider text-destructive">
+            Deweloper
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {devItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive(item.url)}
+                    tooltip={item.title}
+                  >
+                    <NavLink to={item.url}>
+                      <item.icon className="h-4 w-4 text-destructive" />
+                      <span className="text-destructive">{item.title}</span>
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
