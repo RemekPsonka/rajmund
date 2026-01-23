@@ -16,6 +16,9 @@ import ProductionOrdersPage from "./pages/production/ProductionOrdersPage";
 import WeighingTerminalPage from "./pages/production/WeighingTerminalPage";
 import TumblerTerminalPage from "./pages/production/TumblerTerminalPage";
 import PalletizationPage from "./pages/production/PalletizationPage";
+import ShipmentsPage from "./pages/shipping/ShipmentsPage";
+import ShipmentDetailPage from "./pages/shipping/ShipmentDetailPage";
+import DevToolsPage from "./pages/dev/DevToolsPage";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 
@@ -39,6 +42,9 @@ const App = () => (
             <Route path="/warehouse/batches" element={<BatchesPage />} />
             <Route path="/production/orders" element={<ProductionOrdersPage />} />
             <Route path="/production/palletization" element={<PalletizationPage />} />
+            <Route path="/shipping" element={<ShipmentsPage />} />
+            <Route path="/shipping/:id" element={<ShipmentDetailPage />} />
+            <Route path="/dev-tools" element={<DevToolsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
           {/* Terminals without layout - full screen */}

@@ -1197,6 +1197,7 @@ export type Database = {
         Returns: boolean
       }
       is_global_admin: { Args: { _user_id: string }; Returns: boolean }
+      simulate_full_production_day: { Args: never; Returns: Json }
     }
     Enums: {
       app_role: "global_admin" | "facility_admin" | "operator" | "viewer"
