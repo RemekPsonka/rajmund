@@ -520,6 +520,7 @@ export type Database = {
           employee_id: string | null
           handling_unit_id: string | null
           id: string
+          output_batch_id: string | null
           packaging_count: number | null
           packaging_type: string | null
           product_id: string
@@ -535,6 +536,7 @@ export type Database = {
           employee_id?: string | null
           handling_unit_id?: string | null
           id?: string
+          output_batch_id?: string | null
           packaging_count?: number | null
           packaging_type?: string | null
           product_id: string
@@ -550,6 +552,7 @@ export type Database = {
           employee_id?: string | null
           handling_unit_id?: string | null
           id?: string
+          output_batch_id?: string | null
           packaging_count?: number | null
           packaging_type?: string | null
           product_id?: string
@@ -573,6 +576,13 @@ export type Database = {
             columns: ["handling_unit_id"]
             isOneToOne: false
             referencedRelation: "t_handling_units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_production_logs_output_batch_id_fkey"
+            columns: ["output_batch_id"]
+            isOneToOne: false
+            referencedRelation: "t_batches"
             referencedColumns: ["id"]
           },
           {
@@ -1156,6 +1166,10 @@ export type Database = {
           waste_percentage: number
           yield_percentage: number
         }[]
+      }
+      close_production_order_with_batches: {
+        Args: { p_order_id: string }
+        Returns: Json
       }
       generate_batch_number: { Args: { p_product_id: string }; Returns: string }
       generate_document_number: {

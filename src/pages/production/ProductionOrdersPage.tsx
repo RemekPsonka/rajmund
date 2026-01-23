@@ -44,6 +44,7 @@ import {
 import {
   useProductionOrders,
   useUpdateProductionOrderStatus,
+  useCloseProductionOrder,
   type ProductionOrderStatus,
   type ProductionOrderType,
 } from "@/hooks/useProductionOrders";
@@ -73,6 +74,7 @@ export default function ProductionOrdersPage() {
     statusFilter === "all" ? undefined : statusFilter
   );
   const updateStatus = useUpdateProductionOrderStatus();
+  const closeOrder = useCloseProductionOrder();
 
   const filteredOrders = orders?.filter(
     (order) =>
@@ -218,10 +220,11 @@ export default function ProductionOrdersPage() {
                             <DropdownMenuSeparator />
                             {order.status === "Open" && (
                               <DropdownMenuItem
-                                onClick={() => updateStatus.mutate({ id: order.id, status: "Closed" })}
+                                onClick={() => closeOrder.mutate(order.id)}
+                                disabled={closeOrder.isPending}
                               >
                                 <CheckCircle className="mr-2 h-4 w-4 text-success" />
-                                Zamknij zlecenie
+                                {closeOrder.isPending ? "Zamykanie..." : "Zamknij zlecenie (+ partie)"}
                               </DropdownMenuItem>
                             )}
                             {order.status === "Closed" && (

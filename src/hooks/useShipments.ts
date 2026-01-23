@@ -196,11 +196,14 @@ export function useShipmentTraceability(shipmentId: string | undefined) {
         .select(`
           *,
           product:t_products(name, sku),
-          source_batch:t_batches(
+          source_batch:t_batches!t_production_logs_source_batch_id_fkey(
             internal_batch_number,
             production_date,
             expiration_date,
             supplier_batch_number
+          ),
+          output_batch:t_batches!t_production_logs_output_batch_id_fkey(
+            internal_batch_number
           ),
           handling_unit:t_handling_units(sscc_number)
         `)

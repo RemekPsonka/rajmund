@@ -206,7 +206,9 @@ export function usePalletContents(palletId: string | undefined) {
         .select(`
           *,
           product:t_products(name, sku, unit),
-          employee:t_employees(first_name, last_name)
+          employee:t_employees(first_name, last_name),
+          source_batch:t_batches!t_production_logs_source_batch_id_fkey(internal_batch_number),
+          output_batch:t_batches!t_production_logs_output_batch_id_fkey(internal_batch_number)
         `)
         .eq("handling_unit_id", palletId)
         .order("created_at", { ascending: false });
@@ -228,7 +230,8 @@ export function useUnassignedProductionLogs(facilityId?: string) {
         .select(`
           *,
           product:t_products(name, sku, unit, company_id),
-          production_order:t_production_orders(facility_id, facility:t_facilities(name))
+          production_order:t_production_orders(facility_id, facility:t_facilities(name)),
+          source_batch:t_batches!t_production_logs_source_batch_id_fkey(internal_batch_number)
         `)
         .is("handling_unit_id", null)
         .order("created_at", { ascending: false });

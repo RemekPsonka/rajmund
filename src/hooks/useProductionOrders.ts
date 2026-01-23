@@ -41,6 +41,7 @@ export interface ProductionLog {
   employee_id: string | null;
   product_id: string;
   source_batch_id: string | null;
+  output_batch_id: string | null;
   weight_gross: number;
   weight_tare: number;
   weight_net: number;
@@ -51,6 +52,8 @@ export interface ProductionLog {
   // Joined
   employee?: { first_name: string; last_name: string };
   product?: { name: string; sku: string | null; unit: string };
+  source_batch?: { internal_batch_number: string };
+  output_batch?: { internal_batch_number: string };
 }
 
 export interface ProductionOrderFormData {
@@ -164,7 +167,9 @@ export function useProductionLogs(orderId: string | undefined) {
         .select(`
           *,
           employee:t_employees(first_name, last_name),
-          product:t_products(name, sku, unit)
+          product:t_products(name, sku, unit),
+          source_batch:t_batches!t_production_logs_source_batch_id_fkey(internal_batch_number),
+          output_batch:t_batches!t_production_logs_output_batch_id_fkey(internal_batch_number)
         `)
         .eq("production_order_id", orderId)
         .order("created_at", { ascending: false });
@@ -272,6 +277,38 @@ export function useUpdateProductionOrderStatus() {
     },
     onError: (error: Error) => {
       toast.error(`Błąd: ${error.message}`);
+    },
+  });
+}
+
+// Close production order and create output batches
+export function useCloseProductionOrder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (orderId: string) => {
+      const { data, error } = await supabase.rpc("close_production_order_with_batches", {
+        p_order_id: orderId,
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["production-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["batches"] });
+      
+      const result = data as { success: boolean; created_batches: { batch_number: string; product_name: string; quantity: number }[] };
+      if (result.created_batches && result.created_batches.length > 0) {
+        toast.success(
+          `Zlecenie zamknięte. Utworzono ${result.created_batches.length} partii wynikowych.`
+        );
+      } else {
+        toast.success("Zlecenie zamknięte.");
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(`Błąd zamykania zlecenia: ${error.message}`);
     },
   });
 }
