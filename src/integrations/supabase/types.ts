@@ -833,6 +833,9 @@ export type Database = {
           product_id: string | null
           quantity: number | null
           shipment_id: string
+          verified_at: string | null
+          verified_by: string | null
+          verified_weight: number | null
         }
         Insert: {
           batch_id?: string | null
@@ -842,6 +845,9 @@ export type Database = {
           product_id?: string | null
           quantity?: number | null
           shipment_id: string
+          verified_at?: string | null
+          verified_by?: string | null
+          verified_weight?: number | null
         }
         Update: {
           batch_id?: string | null
@@ -851,6 +857,9 @@ export type Database = {
           product_id?: string | null
           quantity?: number | null
           shipment_id?: string
+          verified_at?: string | null
+          verified_by?: string | null
+          verified_weight?: number | null
         }
         Relationships: [
           {
