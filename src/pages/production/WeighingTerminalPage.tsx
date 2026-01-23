@@ -29,6 +29,7 @@ import {
   useProductionOrders,
   useCreateProductionLog,
   useProductionLogs,
+  useProductionInputs,
 } from "@/hooks/useProductionOrders";
 import { cn } from "@/lib/utils";
 
@@ -51,6 +52,7 @@ export default function WeighingTerminalPage() {
   const { data: employees } = useEmployees();
   const { data: products } = useProducts();
   const { data: logs } = useProductionLogs(selectedOrderId || undefined);
+  const { data: inputs } = useProductionInputs(selectedOrderId || undefined);
   const createLog = useCreateProductionLog();
 
   // Filter products - only finished products (not raw materials)
@@ -99,6 +101,9 @@ export default function WeighingTerminalPage() {
   // Calculate net weight
   const weightNet = Math.max(0, weightGross - weightTare);
 
+  // Get the first active input batch for traceability
+  const activeSourceBatchId = inputs && inputs.length > 0 ? inputs[0].batch_id : undefined;
+
   // Submit weighing
   const handleSubmit = async () => {
     if (!selectedOrderId || !selectedProductId || weightGross <= 0) {
@@ -111,6 +116,7 @@ export default function WeighingTerminalPage() {
         production_order_id: selectedOrderId,
         employee_id: verifiedEmployee?.id,
         product_id: selectedProductId,
+        source_batch_id: activeSourceBatchId, // Link to input batch for traceability
         weight_gross: weightGross,
         weight_tare: weightTare,
         packaging_type: "E2",
