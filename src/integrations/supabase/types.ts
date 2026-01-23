@@ -332,6 +332,72 @@ export type Database = {
           },
         ]
       }
+      t_handling_units: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          created_by: string | null
+          facility_id: string
+          id: string
+          items_count: number | null
+          label_printed: boolean | null
+          production_date: string | null
+          sscc_number: string
+          status: string | null
+          total_gross_weight: number | null
+          total_net_weight: number | null
+          type: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          created_by?: string | null
+          facility_id: string
+          id?: string
+          items_count?: number | null
+          label_printed?: boolean | null
+          production_date?: string | null
+          sscc_number: string
+          status?: string | null
+          total_gross_weight?: number | null
+          total_net_weight?: number | null
+          type?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          facility_id?: string
+          id?: string
+          items_count?: number | null
+          label_printed?: boolean | null
+          production_date?: string | null
+          sscc_number?: string
+          status?: string | null
+          total_gross_weight?: number | null
+          total_net_weight?: number | null
+          type?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "t_handling_units_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "t_companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_handling_units_facility_id_fkey"
+            columns: ["facility_id"]
+            isOneToOne: false
+            referencedRelation: "t_facilities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       t_production_inputs: {
         Row: {
           batch_id: string
@@ -388,6 +454,7 @@ export type Database = {
         Row: {
           created_at: string | null
           employee_id: string | null
+          handling_unit_id: string | null
           id: string
           packaging_count: number | null
           packaging_type: string | null
@@ -402,6 +469,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           employee_id?: string | null
+          handling_unit_id?: string | null
           id?: string
           packaging_count?: number | null
           packaging_type?: string | null
@@ -416,6 +484,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           employee_id?: string | null
+          handling_unit_id?: string | null
           id?: string
           packaging_count?: number | null
           packaging_type?: string | null
@@ -433,6 +502,13 @@ export type Database = {
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "t_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_production_logs_handling_unit_id_fkey"
+            columns: ["handling_unit_id"]
+            isOneToOne: false
+            referencedRelation: "t_handling_units"
             referencedColumns: ["id"]
           },
           {
@@ -464,6 +540,7 @@ export type Database = {
           created_at: string | null
           facility_id: string
           id: string
+          machine_id: string | null
           notes: string | null
           order_number: string
           production_date: string | null
@@ -477,6 +554,7 @@ export type Database = {
           created_at?: string | null
           facility_id: string
           id?: string
+          machine_id?: string | null
           notes?: string | null
           order_number: string
           production_date?: string | null
@@ -490,6 +568,7 @@ export type Database = {
           created_at?: string | null
           facility_id?: string
           id?: string
+          machine_id?: string | null
           notes?: string | null
           order_number?: string
           production_date?: string | null
@@ -564,6 +643,96 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "t_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      t_recipe_ingredients: {
+        Row: {
+          created_at: string | null
+          id: string
+          product_id: string
+          ratio: number
+          recipe_id: string
+          unit: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          product_id: string
+          ratio: number
+          recipe_id: string
+          unit?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          product_id?: string
+          ratio?: number
+          recipe_id?: string
+          unit?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "t_recipe_ingredients_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "t_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_recipe_ingredients_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "t_recipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      t_recipes: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          product_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          product_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          product_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "t_recipes_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "t_companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_recipes_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "t_products"
             referencedColumns: ["id"]
           },
         ]
@@ -776,6 +945,7 @@ export type Database = {
         }
         Returns: string
       }
+      generate_sscc_number: { Args: { p_company_id: string }; Returns: string }
       has_company_access: {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
