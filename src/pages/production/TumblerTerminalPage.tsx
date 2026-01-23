@@ -44,6 +44,7 @@ import {
   useCreateProductionLog,
   useProductionInputs,
 } from "@/hooks/useProductionOrders";
+import { PROCESSING_DIRECTIONS, type ProcessingDirection } from "@/hooks/useStorageLocations";
 import { cn } from "@/lib/utils";
 
 const MACHINES = [
@@ -52,9 +53,9 @@ const MACHINES = [
   { id: "MASOWNICA_3", name: "Masownica 3" },
 ];
 
-const DIRECTIONS = [
-  { id: "freezer", name: "Mroźnia", icon: Snowflake, color: "text-blue-500" },
-  { id: "kebab", name: "Kebab / Pakowanie", icon: ArrowRight, color: "text-orange-500" },
+const OUTPUT_DIRECTIONS = [
+  { id: "MROZNIA", name: "Mroźnia", icon: Snowflake, color: "text-blue-500" },
+  { id: "KEBAB", name: "Kebab / Pakowanie", icon: ArrowRight, color: "text-orange-500" },
 ];
 
 const TARE_DEFAULT = 2.0;
@@ -64,6 +65,7 @@ interface InputItem {
   batchNumber: string;
   productName: string;
   weight: number;
+  direction: ProcessingDirection;
   batchId: string;
   productId: string;
 }
@@ -83,9 +85,12 @@ export default function TumblerTerminalPage() {
   const [batchScanCode, setBatchScanCode] = useState("");
   const [inputItems, setInputItems] = useState<InputItem[]>([]);
   
+  // State - Input direction
+  const [inputDirection, setInputDirection] = useState<ProcessingDirection>("MROZNIA");
+  
   // State - Output (Wyjście)
   const [selectedProductId, setSelectedProductId] = useState("");
-  const [direction, setDirection] = useState<string>("freezer");
+  const [outputDirection, setOutputDirection] = useState<string>("MROZNIA");
   const [weightGross, setWeightGross] = useState(0);
   const [weightTare, setWeightTare] = useState(TARE_DEFAULT);
   const [isScaleReading, setIsScaleReading] = useState(false);
@@ -168,6 +173,7 @@ export default function TumblerTerminalPage() {
         weight: batch.current_quantity,
         batchId: batch.id,
         productId: batch.product_id,
+        direction: inputDirection,
       }]);
       
       toast.success(`Dodano: ${batch.internal_batch_number}`);
@@ -208,6 +214,7 @@ export default function TumblerTerminalPage() {
           batch_id: item.batchId,
           product_id: item.productId,
           weight: item.weight,
+          direction: item.direction,
         });
       }
       
@@ -237,7 +244,7 @@ export default function TumblerTerminalPage() {
         scale_device_id: selectedMachine,
       });
 
-      toast.success(`Zapisano: ${weightNet.toFixed(2)} kg → ${direction === "freezer" ? "Mroźnia" : "Kebab"}`);
+      toast.success(`Zapisano: ${weightNet.toFixed(2)} kg → ${outputDirection === "MROZNIA" ? "Mroźnia" : "Kebab"}`);
       
       // Reset for next batch
       setWeightGross(0);
@@ -410,7 +417,24 @@ export default function TumblerTerminalPage() {
                     Skanuj pojemniki wsadu
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-3">
+                  {/* Direction Selection for Input */}
+                  <div>
+                    <label className="text-sm text-muted-foreground mb-2 block">Kierunek przetwórstwa</label>
+                    <Select value={inputDirection} onValueChange={(v) => setInputDirection(v as ProcessingDirection)}>
+                      <SelectTrigger className="h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PROCESSING_DIRECTIONS.map((dir) => (
+                          <SelectItem key={dir.value} value={dir.value}>
+                            {dir.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
                   <div className="flex gap-2">
                     <Input
                       className="h-14 text-xl font-mono flex-1"
@@ -444,11 +468,12 @@ export default function TumblerTerminalPage() {
                     <p>Zeskanuj pojemniki aby dodać wsad</p>
                   </div>
                 ) : (
-                  <Table>
+                <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Partia</TableHead>
                         <TableHead>Produkt</TableHead>
+                        <TableHead>Kierunek</TableHead>
                         <TableHead className="text-right">Waga</TableHead>
                         <TableHead className="w-12"></TableHead>
                       </TableRow>
@@ -460,6 +485,11 @@ export default function TumblerTerminalPage() {
                             {item.batchNumber}
                           </TableCell>
                           <TableCell>{item.productName}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs">
+                              {PROCESSING_DIRECTIONS.find(d => d.value === item.direction)?.label || item.direction}
+                            </Badge>
+                          </TableCell>
                           <TableCell className="text-right font-mono font-medium">
                             {item.weight.toFixed(2)} kg
                           </TableCell>
@@ -550,15 +580,15 @@ export default function TumblerTerminalPage() {
                 <div>
                   <label className="text-sm text-muted-foreground mb-2 block">Kierunek</label>
                   <div className="grid grid-cols-2 gap-2">
-                    {DIRECTIONS.map((dir) => (
+                    {OUTPUT_DIRECTIONS.map((dir) => (
                       <Button
                         key={dir.id}
-                        variant={direction === dir.id ? "default" : "outline"}
+                        variant={outputDirection === dir.id ? "default" : "outline"}
                         className={cn(
                           "h-14",
-                          direction === dir.id && "ring-2 ring-primary"
+                          outputDirection === dir.id && "ring-2 ring-primary"
                         )}
-                        onClick={() => setDirection(dir.id)}
+                        onClick={() => setOutputDirection(dir.id)}
                       >
                         <dir.icon className={cn("h-5 w-5 mr-2", dir.color)} />
                         {dir.name}

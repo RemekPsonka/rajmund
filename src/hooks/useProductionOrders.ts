@@ -28,6 +28,7 @@ export interface ProductionInput {
   batch_id: string;
   product_id: string;
   weight: number;
+  direction: string | null;
   created_by: string | null;
   created_at: string;
   // Joined
@@ -70,6 +71,7 @@ export interface ProductionInputFormData {
   batch_id: string;
   product_id: string;
   weight: number;
+  direction?: string;
 }
 
 export interface ProductionLogFormData {

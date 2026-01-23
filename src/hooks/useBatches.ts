@@ -10,6 +10,7 @@ export interface Batch {
   internal_batch_number: string;
   supplier_batch_number: string | null;
   supplier_id: string | null;
+  location_id: string | null;
   production_date: string | null;
   expiration_date: string | null;
   reception_date: string;
@@ -26,6 +27,10 @@ export interface Batch {
   };
   supplier?: {
     name: string;
+  };
+  location?: {
+    name: string;
+    location_type: string;
   };
 }
 
@@ -50,7 +55,8 @@ export function useBatches() {
         .select(`
           *,
           product:t_products(name, sku, unit),
-          supplier:t_contractors(name)
+          supplier:t_contractors(name),
+          location:t_storage_locations(name, location_type)
         `)
         .order("created_at", { ascending: false });
 
@@ -70,7 +76,8 @@ export function useBatch(id: string | undefined) {
         .select(`
           *,
           product:t_products(name, sku, unit),
-          supplier:t_contractors(name)
+          supplier:t_contractors(name),
+          location:t_storage_locations(name, location_type)
         `)
         .eq("id", id)
         .maybeSingle();
