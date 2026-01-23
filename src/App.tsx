@@ -32,6 +32,7 @@ import PackagingTypesPage from "./pages/settings/PackagingTypesPage";
 import UnitsOfMeasurePage from "./pages/settings/UnitsOfMeasurePage";
 import RecipesPage from "./pages/settings/RecipesPage";
 import TaskTemplatesPage from "./pages/settings/TaskTemplatesPage";
+import UsersPage from "./pages/settings/UsersPage";
 import DevToolsPage from "./pages/dev/DevToolsPage";
 import SystemHealthPage from "./pages/dev/SystemHealthPage";
 import SettingsPage from "./pages/SettingsPage";
@@ -78,6 +79,7 @@ const App = () => (
               <Route path="/settings/units" element={<UnitsOfMeasurePage />} />
               <Route path="/settings/recipes" element={<RecipesPage />} />
               <Route path="/settings/task-templates" element={<TaskTemplatesPage />} />
+              <Route path="/settings/users" element={<UsersPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
           </Route>
