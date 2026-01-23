@@ -44,7 +44,7 @@ export default function PackagingBalancePage() {
 
   // Filter contractors with any packaging balance
   const contractorsWithBalance = contractors?.filter(c => 
-    c.is_customer || c.is_logistics
+    c.is_customer || c.is_logistics || c.is_supplier
   );
 
   const filteredContractors = contractorsWithBalance?.filter((c) => {
@@ -177,6 +177,9 @@ export default function PackagingBalancePage() {
                       <TableCell className="font-medium">
                         {contractor.name}
                         <div className="flex gap-1 mt-1">
+                          {contractor.is_supplier && (
+                            <Badge variant="outline" className="text-xs">Dostawca</Badge>
+                          )}
                           {contractor.is_customer && (
                             <Badge variant="outline" className="text-xs">Odbiorca</Badge>
                           )}
