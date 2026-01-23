@@ -417,8 +417,8 @@ export default function ProductionOrderDetailPage() {
                         : "—"}
                     </TableCell>
                     <TableCell>
-                      {log.employee
-                        ? `${log.employee.first_name} ${log.employee.last_name}`
+                      {log.weighing_employee
+                        ? `${log.weighing_employee.first_name} ${log.weighing_employee.last_name}`
                         : "—"}
                     </TableCell>
                     <TableCell>{log.product?.name || "—"}</TableCell>

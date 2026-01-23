@@ -206,7 +206,8 @@ export function usePalletContents(palletId: string | undefined) {
         .select(`
           *,
           product:t_products(name, sku, unit),
-          employee:t_employees(first_name, last_name),
+          weighing_employee:t_employees!t_production_logs_employee_id_fkey(first_name, last_name),
+          preparing_employee:t_employees!t_production_logs_prepared_by_employee_id_fkey(first_name, last_name),
           source_batch:t_batches!t_production_logs_source_batch_id_fkey(internal_batch_number),
           output_batch:t_batches!t_production_logs_output_batch_id_fkey(internal_batch_number)
         `)

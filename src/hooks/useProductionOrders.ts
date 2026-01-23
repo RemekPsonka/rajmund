@@ -40,6 +40,7 @@ export interface ProductionLog {
   id: string;
   production_order_id: string;
   employee_id: string | null;
+  prepared_by_employee_id: string | null;
   product_id: string;
   source_batch_id: string | null;
   output_batch_id: string | null;
@@ -51,7 +52,8 @@ export interface ProductionLog {
   scale_device_id: string | null;
   created_at: string;
   // Joined
-  employee?: { first_name: string; last_name: string };
+  weighing_employee?: { first_name: string; last_name: string };
+  preparing_employee?: { first_name: string; last_name: string };
   product?: { name: string; sku: string | null; unit: string };
   source_batch?: { internal_batch_number: string };
   output_batch?: { internal_batch_number: string };
@@ -77,6 +79,7 @@ export interface ProductionInputFormData {
 export interface ProductionLogFormData {
   production_order_id: string;
   employee_id?: string;
+  prepared_by_employee_id?: string;
   product_id: string;
   source_batch_id?: string;
   weight_gross: number;
@@ -168,7 +171,8 @@ export function useProductionLogs(orderId: string | undefined) {
         .from("t_production_logs")
         .select(`
           *,
-          employee:t_employees(first_name, last_name),
+          weighing_employee:t_employees!t_production_logs_employee_id_fkey(first_name, last_name),
+          preparing_employee:t_employees!t_production_logs_prepared_by_employee_id_fkey(first_name, last_name),
           product:t_products(name, sku, unit),
           source_batch:t_batches!t_production_logs_source_batch_id_fkey(internal_batch_number),
           output_batch:t_batches!t_production_logs_output_batch_id_fkey(internal_batch_number)
