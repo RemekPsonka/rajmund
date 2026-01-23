@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Plus, Search, Package, Upload, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useProducts, useDeleteProduct, type Product } from "@/hooks/useProducts";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -54,7 +56,20 @@ export default function ProductsPage() {
     setDrawerOpen(true);
   };
 
-  const handleDelete = (product: Product) => {
+  const handleDelete = async (product: Product) => {
+    // Check if product has related batches
+    const { count } = await supabase
+      .from("t_batches")
+      .select("*", { count: "exact", head: true })
+      .eq("product_id", product.id);
+    
+    if (count && count > 0) {
+      toast.error(`Nie można usunąć produktu "${product.name}"`, {
+        description: `Produkt ma ${count} powiązanych partii magazynowych. Usuń najpierw partie.`
+      });
+      return;
+    }
+    
     setProductToDelete(product);
     setDeleteDialogOpen(true);
   };
