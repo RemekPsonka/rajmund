@@ -38,6 +38,69 @@ export type Database = {
         }
         Relationships: []
       }
+      t_batches: {
+        Row: {
+          created_at: string | null
+          current_quantity: number
+          expiration_date: string | null
+          id: string
+          initial_quantity: number
+          internal_batch_number: string
+          product_id: string
+          production_date: string | null
+          reception_date: string | null
+          status: Database["public"]["Enums"]["batch_status"] | null
+          supplier_batch_number: string | null
+          supplier_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          current_quantity: number
+          expiration_date?: string | null
+          id?: string
+          initial_quantity: number
+          internal_batch_number: string
+          product_id: string
+          production_date?: string | null
+          reception_date?: string | null
+          status?: Database["public"]["Enums"]["batch_status"] | null
+          supplier_batch_number?: string | null
+          supplier_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          current_quantity?: number
+          expiration_date?: string | null
+          id?: string
+          initial_quantity?: number
+          internal_batch_number?: string
+          product_id?: string
+          production_date?: string | null
+          reception_date?: string | null
+          status?: Database["public"]["Enums"]["batch_status"] | null
+          supplier_batch_number?: string | null
+          supplier_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "t_batches_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "t_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_batches_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "t_contractors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       t_companies: {
         Row: {
           created_at: string | null
@@ -269,6 +332,59 @@ export type Database = {
           },
         ]
       }
+      t_products: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          default_expiration_days: number | null
+          id: string
+          is_raw_material: boolean | null
+          max_storage_temp: number | null
+          min_storage_temp: number | null
+          name: string
+          sku: string | null
+          subiekt_id: string | null
+          unit: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          default_expiration_days?: number | null
+          id?: string
+          is_raw_material?: boolean | null
+          max_storage_temp?: number | null
+          min_storage_temp?: number | null
+          name: string
+          sku?: string | null
+          subiekt_id?: string | null
+          unit?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          default_expiration_days?: number | null
+          id?: string
+          is_raw_material?: boolean | null
+          max_storage_temp?: number | null
+          min_storage_temp?: number | null
+          name?: string
+          sku?: string | null
+          subiekt_id?: string | null
+          unit?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "t_products_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "t_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       t_user_roles: {
         Row: {
           company_id: string | null
@@ -311,11 +427,156 @@ export type Database = {
           },
         ]
       }
+      t_warehouse_movement_items: {
+        Row: {
+          batch_id: string | null
+          created_at: string | null
+          id: string
+          movement_id: string
+          packaging_type: string | null
+          pallets_count: number | null
+          product_id: string
+          quantity: number
+        }
+        Insert: {
+          batch_id?: string | null
+          created_at?: string | null
+          id?: string
+          movement_id: string
+          packaging_type?: string | null
+          pallets_count?: number | null
+          product_id: string
+          quantity: number
+        }
+        Update: {
+          batch_id?: string | null
+          created_at?: string | null
+          id?: string
+          movement_id?: string
+          packaging_type?: string | null
+          pallets_count?: number | null
+          product_id?: string
+          quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "t_warehouse_movement_items_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "t_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_warehouse_movement_items_movement_id_fkey"
+            columns: ["movement_id"]
+            isOneToOne: false
+            referencedRelation: "t_warehouse_movements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_warehouse_movement_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "t_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      t_warehouse_movements: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          car_plates: string | null
+          company_id: string
+          contractor_id: string | null
+          created_at: string | null
+          created_by: string | null
+          document_number: string
+          driver_name: string | null
+          external_doc_number: string | null
+          facility_id: string
+          id: string
+          notes: string | null
+          reception_temp: number | null
+          status: Database["public"]["Enums"]["document_status"] | null
+          type: Database["public"]["Enums"]["warehouse_doc_type"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          car_plates?: string | null
+          company_id: string
+          contractor_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          document_number: string
+          driver_name?: string | null
+          external_doc_number?: string | null
+          facility_id: string
+          id?: string
+          notes?: string | null
+          reception_temp?: number | null
+          status?: Database["public"]["Enums"]["document_status"] | null
+          type?: Database["public"]["Enums"]["warehouse_doc_type"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          car_plates?: string | null
+          company_id?: string
+          contractor_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          document_number?: string
+          driver_name?: string | null
+          external_doc_number?: string | null
+          facility_id?: string
+          id?: string
+          notes?: string | null
+          reception_temp?: number | null
+          status?: Database["public"]["Enums"]["document_status"] | null
+          type?: Database["public"]["Enums"]["warehouse_doc_type"] | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "t_warehouse_movements_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "t_companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_warehouse_movements_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "t_contractors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_warehouse_movements_facility_id_fkey"
+            columns: ["facility_id"]
+            isOneToOne: false
+            referencedRelation: "t_facilities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      generate_batch_number: { Args: { p_product_id: string }; Returns: string }
+      generate_document_number: {
+        Args: {
+          p_company_id: string
+          p_type: Database["public"]["Enums"]["warehouse_doc_type"]
+        }
+        Returns: string
+      }
       has_company_access: {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
@@ -335,8 +596,11 @@ export type Database = {
     }
     Enums: {
       app_role: "global_admin" | "facility_admin" | "operator" | "viewer"
+      batch_status: "Released" | "Blocked" | "Quarantine"
       contract_type: "B2B" | "UoP" | "Mandate" | "Other"
+      document_status: "Draft" | "Approved" | "Cancelled"
       facility_type: "Plant" | "Warehouse" | "Office" | "Store"
+      warehouse_doc_type: "PZ" | "WZ" | "MM" | "RW" | "PW"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -465,8 +729,11 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["global_admin", "facility_admin", "operator", "viewer"],
+      batch_status: ["Released", "Blocked", "Quarantine"],
       contract_type: ["B2B", "UoP", "Mandate", "Other"],
+      document_status: ["Draft", "Approved", "Cancelled"],
       facility_type: ["Plant", "Warehouse", "Office", "Store"],
+      warehouse_doc_type: ["PZ", "WZ", "MM", "RW", "PW"],
     },
   },
 } as const
