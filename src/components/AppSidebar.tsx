@@ -1,4 +1,14 @@
-import { Building2, Users, Settings, LayoutDashboard, Factory, ChevronRight } from "lucide-react";
+import {
+  Building2,
+  Users,
+  Settings,
+  LayoutDashboard,
+  Factory,
+  ChevronRight,
+  Package,
+  FileInput,
+  Layers,
+} from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 
@@ -21,6 +31,15 @@ const mainItems = [
 const structureItems = [
   { title: "Spółki", url: "/companies", icon: Building2 },
   { title: "Zakłady", url: "/facilities", icon: Factory },
+];
+
+const catalogItems = [
+  { title: "Produkty", url: "/products", icon: Package },
+];
+
+const warehouseItems = [
+  { title: "Przyjęcia (PZ)", url: "/warehouse/deliveries", icon: FileInput },
+  { title: "Ewidencja Partii", url: "/warehouse/batches", icon: Layers },
 ];
 
 const hrItems = [
@@ -90,6 +109,58 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {structureItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive(item.url)}
+                    tooltip={item.title}
+                  >
+                    <NavLink to={item.url}>
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                      {!collapsed && <ChevronRight className="ml-auto h-3 w-3 opacity-50" />}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Catalog Section */}
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-sidebar-foreground/60 text-xs uppercase tracking-wider">
+            Kartoteki
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {catalogItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive(item.url)}
+                    tooltip={item.title}
+                  >
+                    <NavLink to={item.url}>
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                      {!collapsed && <ChevronRight className="ml-auto h-3 w-3 opacity-50" />}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Warehouse Section */}
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-sidebar-foreground/60 text-xs uppercase tracking-wider">
+            Magazyn (WMS)
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {warehouseItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
