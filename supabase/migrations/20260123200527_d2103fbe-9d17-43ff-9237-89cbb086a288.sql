@@ -1,0 +1,314 @@
+-- Poprawiona funkcja simulate_full_production_day - bez weight_net w INSERT (jest generated column)
+
+CREATE OR REPLACE FUNCTION public.simulate_full_production_day()
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+    v_company_id UUID;
+    v_facility_id UUID;
+    v_employee_jan UUID;
+    v_employee_adam UUID;
+    v_employee_anna UUID;
+    v_supplier_id UUID;
+    v_customer_id UUID;
+    v_carrier_id UUID;
+    v_location_chiller UUID;
+    v_location_freezer UUID;
+    v_location_production UUID;
+    v_product_raw_id UUID;
+    v_product_fillet_id UUID;
+    v_product_bones_id UUID;
+    v_product_kebab_id UUID;
+    v_product_e2_id UUID;
+    v_recipe_id UUID;
+    v_batch_input_id UUID;
+    v_batch_fillet_id UUID;
+    v_batch_bones_id UUID;
+    v_batch_kebab_id UUID;
+    v_order_rozbior_id UUID;
+    v_order_kebab_id UUID;
+    v_pz_movement_id UUID;
+    v_pallet_1_id UUID;
+    v_pallet_2_id UUID;
+    v_pallet_3_id UUID;
+    v_pallet_4_id UUID;
+    v_shipment_id UUID;
+    v_i INTEGER;
+    v_log_id UUID;
+BEGIN
+    -- CLEANUP: Użyj TRUNCATE CASCADE - omija RLS, FK i jest atomowe
+    TRUNCATE public.t_packaging_transactions,
+             public.t_shipment_items,
+             public.t_shipments,
+             public.t_handling_units,
+             public.t_production_logs,
+             public.t_production_inputs,
+             public.t_production_orders,
+             public.t_warehouse_movement_items,
+             public.t_warehouse_movements,
+             public.t_batches,
+             public.t_recipe_ingredients,
+             public.t_recipes,
+             public.t_products,
+             public.t_employees,
+             public.t_departments,
+             public.t_contractors,
+             public.t_storage_locations,
+             public.t_facilities,
+             public.t_companies
+    CASCADE;
+    
+    -- Company & Facility
+    INSERT INTO public.t_companies (name, short_name, tax_id)
+    VALUES ('Narrow Sp. z o.o.', 'NARROW', '1234567890')
+    RETURNING id INTO v_company_id;
+    
+    INSERT INTO public.t_facilities (company_id, name, type, vet_approval_number)
+    VALUES (v_company_id, 'Zakład Myszków', 'Plant', 'PL24094301WE')
+    RETURNING id INTO v_facility_id;
+    
+    -- Storage Locations
+    INSERT INTO public.t_storage_locations (facility_id, name, location_type, min_temp, max_temp, is_active)
+    VALUES (v_facility_id, 'Chłodnia Przyjęć', 'chiller', 0, 4, true)
+    RETURNING id INTO v_location_chiller;
+    
+    INSERT INTO public.t_storage_locations (facility_id, name, location_type, min_temp, max_temp, is_active)
+    VALUES (v_facility_id, 'Mroźnia Wyrobów', 'freezer', -22, -18, true)
+    RETURNING id INTO v_location_freezer;
+    
+    INSERT INTO public.t_storage_locations (facility_id, name, location_type, min_temp, max_temp, is_active)
+    VALUES (v_facility_id, 'Hala Produkcyjna', 'production', 8, 12, true)
+    RETURNING id INTO v_location_production;
+    
+    -- Employees
+    INSERT INTO public.t_employees (company_id, facility_id, first_name, last_name, job_position, qr_login_code, contract_type)
+    VALUES (v_company_id, v_facility_id, 'Jan', 'Kowalski', 'Operator Wagi', 'QR_JAN', 'UoP')
+    RETURNING id INTO v_employee_jan;
+    
+    INSERT INTO public.t_employees (company_id, facility_id, first_name, last_name, job_position, qr_login_code, contract_type)
+    VALUES (v_company_id, v_facility_id, 'Adam', 'Nowak', 'Trybowszczyk', 'QR_ADAM', 'UoP')
+    RETURNING id INTO v_employee_adam;
+    
+    INSERT INTO public.t_employees (company_id, facility_id, first_name, last_name, job_position, qr_login_code, contract_type)
+    VALUES (v_company_id, v_facility_id, 'Anna', 'Zmiana', 'Kierownik Zmiany', 'QR_ANNA', 'UoP')
+    RETURNING id INTO v_employee_anna;
+    
+    -- Contractors
+    INSERT INTO public.t_contractors (company_id, name, tax_id, is_supplier, vet_number)
+    VALUES (v_company_id, '2Mundos S.A.', '5223135900', true, 'ES12345678')
+    RETURNING id INTO v_supplier_id;
+    
+    INSERT INTO public.t_contractors (company_id, name, is_customer, vet_number)
+    VALUES (v_company_id, 'Josef Schnabels GmbH', true, 'DE987654321')
+    RETURNING id INTO v_customer_id;
+    
+    INSERT INTO public.t_contractors (company_id, name, is_logistics)
+    VALUES (v_company_id, 'Trans-Europa Sp. z o.o.', true)
+    RETURNING id INTO v_carrier_id;
+    
+    -- Products
+    INSERT INTO public.t_products (company_id, name, sku, unit, is_raw_material, default_expiration_days, min_storage_temp, max_storage_temp)
+    VALUES (v_company_id, 'Ćwiartka Kurczaka A', 'SU-001', 'kg', true, 7, 0, 4)
+    RETURNING id INTO v_product_raw_id;
+    
+    INSERT INTO public.t_products (company_id, name, sku, unit, is_raw_material, default_expiration_days, min_storage_temp, max_storage_temp)
+    VALUES (v_company_id, 'Filet z piersi', 'PP-001', 'kg', false, 5, 0, 4)
+    RETURNING id INTO v_product_fillet_id;
+    
+    INSERT INTO public.t_products (company_id, name, sku, unit, is_raw_material, default_expiration_days, min_storage_temp, max_storage_temp)
+    VALUES (v_company_id, 'Kości', 'ODP-001', 'kg', false, 3, 0, 4)
+    RETURNING id INTO v_product_bones_id;
+    
+    INSERT INTO public.t_products (company_id, name, sku, unit, is_raw_material, default_expiration_days, min_storage_temp, max_storage_temp)
+    VALUES (v_company_id, 'Kebab Czerwony 15kg', 'KEB-RED', 'kg', false, 180, -20, -18)
+    RETURNING id INTO v_product_kebab_id;
+    
+    INSERT INTO public.t_products (company_id, name, sku, unit, is_raw_material)
+    VALUES (v_company_id, 'Pojemnik E2', 'OPK-E2', 'szt', false)
+    RETURNING id INTO v_product_e2_id;
+    
+    -- Recipe
+    INSERT INTO public.t_recipes (company_id, product_id, name, description)
+    VALUES (v_company_id, v_product_kebab_id, 'Kebab Standard', 'Receptura: 90% Filet + 10% woda/przyprawy')
+    RETURNING id INTO v_recipe_id;
+    
+    INSERT INTO public.t_recipe_ingredients (recipe_id, product_id, ratio, unit)
+    VALUES (v_recipe_id, v_product_fillet_id, 0.90, 'kg');
+    
+    -- WMS: PZ - Przyjęcie surowca
+    INSERT INTO public.t_warehouse_movements (company_id, facility_id, type, document_number, contractor_id, external_doc_number, driver_name, car_plates, reception_temp, status)
+    VALUES (v_company_id, v_facility_id, 'PZ', 'PZ/2026/01/001', v_supplier_id, 'HDI-2M-2026-001', 'Carlos Rodriguez', 'M 1234 ABC', 2.5, 'Approved')
+    RETURNING id INTO v_pz_movement_id;
+    
+    -- Partia surowca z lokalizacją
+    INSERT INTO public.t_batches (product_id, internal_batch_number, supplier_batch_number, supplier_id, initial_quantity, current_quantity, production_date, expiration_date, status, location_id)
+    VALUES (v_product_raw_id, TO_CHAR(NOW(), 'YYYYMMDD') || '/SU-001/001', '2M-BATCH-2026-001', v_supplier_id, 5000, 5000, CURRENT_DATE - 1, CURRENT_DATE + 6, 'Released', v_location_chiller)
+    RETURNING id INTO v_batch_input_id;
+    
+    INSERT INTO public.t_warehouse_movement_items (movement_id, product_id, batch_id, quantity)
+    VALUES (v_pz_movement_id, v_product_raw_id, v_batch_input_id, 5000);
+    
+    INSERT INTO public.t_packaging_transactions (company_id, contractor_id, type, packaging_type, quantity, comments)
+    VALUES (v_company_id, v_supplier_id, 'Received', 'Paleta EUR', 15, 'PZ/2026/01/001'), 
+           (v_company_id, v_supplier_id, 'Received', 'E2', 100, 'PZ/2026/01/001');
+    
+    -- MES: Decomposition (Rozbór)
+    INSERT INTO public.t_production_orders (company_id, facility_id, order_number, type, status, production_date, notes)
+    VALUES (v_company_id, v_facility_id, 'ROZ/2026/01/23/01', 'Decomposition', 'Open', CURRENT_DATE, 'Nadzór: Anna Zmiana')
+    RETURNING id INTO v_order_rozbior_id;
+    
+    -- RW: Wydanie surowca na produkcję (trigger automatycznie zmniejszy stan partii)
+    INSERT INTO public.t_production_inputs (production_order_id, batch_id, product_id, weight, direction)
+    VALUES (v_order_rozbior_id, v_batch_input_id, v_product_raw_id, 5000, 'SWIEZE');
+    
+    -- Logi produkcyjne dla filetu (50 x 60kg netto = 3000kg)
+    -- UWAGA: weight_net jest generated column, nie podajemy jej!
+    FOR v_i IN 1..50 LOOP
+        INSERT INTO public.t_production_logs (production_order_id, employee_id, product_id, source_batch_id, weight_gross, weight_tare, packaging_type, packaging_count, scale_device_id)
+        VALUES (v_order_rozbior_id, v_employee_jan, v_product_fillet_id, v_batch_input_id, 62.0, 2.0, 'E2', 1, 'SCALE_01');
+    END LOOP;
+    
+    -- Logi produkcyjne dla kości (38 x 50kg netto = 1900kg)
+    FOR v_i IN 1..38 LOOP
+        INSERT INTO public.t_production_logs (production_order_id, employee_id, product_id, source_batch_id, weight_gross, weight_tare, packaging_type, packaging_count, scale_device_id)
+        VALUES (v_order_rozbior_id, v_employee_adam, v_product_bones_id, v_batch_input_id, 52.0, 2.0, 'E2', 1, 'SCALE_02');
+    END LOOP;
+    
+    -- Zamknij zlecenie rozbioru - to automatycznie utworzy partie wynikowe i przypisze output_batch_id
+    PERFORM public.close_production_order_with_batches(v_order_rozbior_id);
+    
+    -- Pobierz ID utworzonych partii
+    SELECT id INTO v_batch_fillet_id FROM public.t_batches WHERE product_id = v_product_fillet_id ORDER BY created_at DESC LIMIT 1;
+    SELECT id INTO v_batch_bones_id FROM public.t_batches WHERE product_id = v_product_bones_id ORDER BY created_at DESC LIMIT 1;
+    
+    -- MES: Processing (Przetwórstwo - Kebab)
+    INSERT INTO public.t_production_orders (company_id, facility_id, order_number, type, status, production_date, machine_id)
+    VALUES (v_company_id, v_facility_id, 'PRZ/2026/01/23/01', 'Processing', 'Open', CURRENT_DATE, 'MASOWNICA_1')
+    RETURNING id INTO v_order_kebab_id;
+    
+    -- RW: Wydanie filetu na produkcję kebaba (trigger automatycznie zmniejszy stan partii)
+    INSERT INTO public.t_production_inputs (production_order_id, batch_id, product_id, weight, direction)
+    VALUES (v_order_kebab_id, v_batch_fillet_id, v_product_fillet_id, 3000, 'KEBAB');
+    
+    -- Utwórz palety PRZED logami
+    INSERT INTO public.t_handling_units (company_id, facility_id, sscc_number, type, status, production_date)
+    VALUES (v_company_id, v_facility_id, '00' || TO_CHAR(NOW(), 'YYMMDDHH24MI') || '0001', 'Pallet', 'Open', CURRENT_DATE)
+    RETURNING id INTO v_pallet_1_id;
+    INSERT INTO public.t_handling_units (company_id, facility_id, sscc_number, type, status, production_date)
+    VALUES (v_company_id, v_facility_id, '00' || TO_CHAR(NOW(), 'YYMMDDHH24MI') || '0002', 'Pallet', 'Open', CURRENT_DATE)
+    RETURNING id INTO v_pallet_2_id;
+    INSERT INTO public.t_handling_units (company_id, facility_id, sscc_number, type, status, production_date)
+    VALUES (v_company_id, v_facility_id, '00' || TO_CHAR(NOW(), 'YYMMDDHH24MI') || '0003', 'Pallet', 'Open', CURRENT_DATE)
+    RETURNING id INTO v_pallet_3_id;
+    INSERT INTO public.t_handling_units (company_id, facility_id, sscc_number, type, status, production_date)
+    VALUES (v_company_id, v_facility_id, '00' || TO_CHAR(NOW(), 'YYMMDDHH24MI') || '0004', 'Pallet', 'Open', CURRENT_DATE)
+    RETURNING id INTO v_pallet_4_id;
+    
+    -- Logi produkcyjne dla kebaba (220 x 15kg netto = 3300kg) - od razu przypisane do palet
+    -- weight_net jest generated column, nie podajemy jej!
+    FOR v_i IN 1..220 LOOP
+        INSERT INTO public.t_production_logs (
+            production_order_id, employee_id, product_id, source_batch_id, 
+            weight_gross, weight_tare, packaging_type, packaging_count, scale_device_id,
+            handling_unit_id
+        )
+        VALUES (
+            v_order_kebab_id, v_employee_jan, v_product_kebab_id, v_batch_fillet_id, 
+            15.5, 0.5, 'Poliblok', 1, 'SCALE_03',
+            CASE 
+                WHEN v_i <= 55 THEN v_pallet_1_id 
+                WHEN v_i <= 110 THEN v_pallet_2_id 
+                WHEN v_i <= 165 THEN v_pallet_3_id 
+                ELSE v_pallet_4_id 
+            END
+        );
+    END LOOP;
+    
+    -- Zamknij zlecenie kebab - to utworzy partię wynikową i przypisze output_batch_id do wszystkich logów
+    PERFORM public.close_production_order_with_batches(v_order_kebab_id);
+    
+    -- Pobierz ID partii kebab
+    SELECT id INTO v_batch_kebab_id FROM public.t_batches WHERE product_id = v_product_kebab_id ORDER BY created_at DESC LIMIT 1;
+    
+    -- Zamknij palety
+    UPDATE public.t_handling_units SET status = 'Closed' WHERE id IN (v_pallet_1_id, v_pallet_2_id, v_pallet_3_id, v_pallet_4_id);
+    
+    -- Shipment (WZ)
+    INSERT INTO public.t_shipments (company_id, facility_id, shipment_number, status, customer_id, carrier_id, driver_name, truck_plates, trailer_plates, transport_temperature, dispatch_date)
+    VALUES (v_company_id, v_facility_id, 'WZ/2026/01/001', 'Loading', v_customer_id, v_carrier_id, 'Hans Mueller', 'SK 44222', 'SK 44223', -18.0, CURRENT_DATE)
+    RETURNING id INTO v_shipment_id;
+    
+    -- Dodaj palety do wysyłki z weryfikacją wagi (trigger automatycznie wypełni batch_id)
+    INSERT INTO public.t_shipment_items (shipment_id, handling_unit_id, verified_weight, verified_at)
+    VALUES 
+        (v_shipment_id, v_pallet_1_id, 825.0, NOW()),
+        (v_shipment_id, v_pallet_2_id, 825.0, NOW()),
+        (v_shipment_id, v_pallet_3_id, 825.0, NOW()),
+        (v_shipment_id, v_pallet_4_id, 825.0, NOW());
+    
+    -- Zmień status wysyłki na Shipped
+    UPDATE public.t_shipments SET status = 'Shipped' WHERE id = v_shipment_id;
+    
+    -- Zmień status palet na Shipped
+    UPDATE public.t_handling_units SET status = 'Shipped' WHERE id IN (v_pallet_1_id, v_pallet_2_id, v_pallet_3_id, v_pallet_4_id);
+    
+    -- Zmniejsz stan partii kebab (wysłano wszystko)
+    UPDATE public.t_batches SET current_quantity = 0 WHERE id = v_batch_kebab_id;
+    
+    -- Opakowania wydane
+    INSERT INTO public.t_packaging_transactions (company_id, shipment_id, contractor_id, type, packaging_type, quantity)
+    VALUES (v_company_id, v_shipment_id, v_customer_id, 'Issued', 'Paleta EUR', 4), 
+           (v_company_id, v_shipment_id, v_customer_id, 'Issued', 'Karton', 220);
+    
+    RETURN jsonb_build_object(
+        'success', true,
+        'message', 'Symulacja zakończona pomyślnie - pełna traceability',
+        'summary', jsonb_build_object(
+            'company_id', v_company_id, 
+            'facility_id', v_facility_id,
+            'input_weight_kg', 5000, 
+            'fillet_produced_kg', 3000, 
+            'bones_produced_kg', 1900,
+            'technological_loss_kg', 100, 
+            'yield_decomposition_pct', 60,
+            'kebab_produced_kg', 3300, 
+            'kebab_blocks', 220, 
+            'pallets_created', 4,
+            'shipment_status', 'Shipped', 
+            'bones_remaining_kg', 1900, 
+            'kebab_remaining_kg', 0,
+            'chiller_location_id', v_location_chiller, 
+            'freezer_location_id', v_location_freezer,
+            'batches_with_location', 4,
+            'batches_with_output_link', 3,
+            'shipment_items_with_batch', 4,
+            'shipment_items_verified', 4
+        ),
+        'employees', jsonb_build_object(
+            'jan_kowalski_id', v_employee_jan, 
+            'adam_nowak_id', v_employee_adam, 
+            'anna_zmiana_id', v_employee_anna
+        ),
+        'test_codes', jsonb_build_object(
+            'qr_jan', 'QR_JAN', 
+            'qr_adam', 'QR_ADAM', 
+            'qr_anna', 'QR_ANNA'
+        ),
+        'storage_locations', jsonb_build_object(
+            'chiller', v_location_chiller, 
+            'freezer', v_location_freezer, 
+            'production', v_location_production
+        ),
+        'traceability', jsonb_build_object(
+            'input_batch_id', v_batch_input_id,
+            'fillet_batch_id', v_batch_fillet_id,
+            'bones_batch_id', v_batch_bones_id,
+            'kebab_batch_id', v_batch_kebab_id,
+            'shipment_id', v_shipment_id
+        )
+    );
+END;
+$function$;
