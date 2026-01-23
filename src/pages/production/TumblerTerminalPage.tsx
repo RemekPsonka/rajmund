@@ -86,7 +86,7 @@ export default function TumblerTerminalPage() {
   const [inputItems, setInputItems] = useState<InputItem[]>([]);
   
   // State - Input direction
-  const [inputDirection, setInputDirection] = useState<ProcessingDirection>("MROZNIA");
+  const [inputDirection, setInputDirection] = useState<ProcessingDirection>("SWIEZE");
   
   // State - Output (Wyjście)
   const [selectedProductId, setSelectedProductId] = useState("");
