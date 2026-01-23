@@ -34,6 +34,7 @@ export interface FlowFilters {
   facilityId?: string;
   orderType?: string;
   productId?: string;
+  orderId?: string;
 }
 
 export interface ProductionFlowDetail {

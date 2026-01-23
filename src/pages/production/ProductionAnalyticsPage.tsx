@@ -5,11 +5,13 @@ import { ProductionFlowFilters } from "@/components/production/ProductionFlowFil
 import { ProductionFlowKPIs } from "@/components/production/ProductionFlowKPIs";
 import { ProductionFlowChart } from "@/components/production/ProductionFlowChart";
 import { ProductionFlowTable } from "@/components/production/ProductionFlowTable";
+import { OrderFlowDetailPanel } from "@/components/production/OrderFlowDetailPanel";
 import {
   useProductionFlow,
   useProductionFlowDetails,
   type FlowFilters,
 } from "@/hooks/useProductionFlow";
+import { useOrderTraceability } from "@/hooks/useOrderTraceability";
 
 export default function ProductionAnalyticsPage() {
   const [filters, setFilters] = useState<FlowFilters>({});
@@ -26,9 +28,18 @@ export default function ProductionAnalyticsPage() {
     refetch: refetchDetails,
   } = useProductionFlowDetails(filters);
 
+  const {
+    data: orderTraceability,
+    isLoading: isLoadingTraceability,
+    refetch: refetchTraceability,
+  } = useOrderTraceability(filters.orderId);
+
   const handleRefresh = () => {
     refetchFlow();
     refetchDetails();
+    if (filters.orderId) {
+      refetchTraceability();
+    }
   };
 
   const emptySummary = {
@@ -39,6 +50,9 @@ export default function ProductionAnalyticsPage() {
     ordersCount: 0,
     batchesCreated: 0,
   };
+
+  // Single order mode vs aggregate mode
+  const isSingleOrderMode = !!filters.orderId;
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -51,7 +65,10 @@ export default function ProductionAnalyticsPage() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Analiza przepływu produkcji</h1>
             <p className="text-muted-foreground">
-              Śledzenie materiałów od wejścia (PZ) do wyjścia (WZ)
+              {isSingleOrderMode
+                ? "Szczegółowy przepływ materiałów dla wybranego zlecenia"
+                : "Śledzenie materiałów od wejścia (PZ) do wyjścia (WZ)"
+              }
             </p>
           </div>
         </div>
@@ -64,24 +81,45 @@ export default function ProductionAnalyticsPage() {
       {/* Filters */}
       <ProductionFlowFilters filters={filters} onFiltersChange={setFilters} />
 
-      {/* KPIs */}
-      <ProductionFlowKPIs
-        summary={flowData?.summary || emptySummary}
-        isLoading={isLoadingFlow}
-      />
+      {isSingleOrderMode ? (
+        /* Single Order Mode - Detailed Traceability */
+        <>
+          {/* Order Detail Panel */}
+          <OrderFlowDetailPanel
+            data={orderTraceability || null}
+            isLoading={isLoadingTraceability}
+          />
 
-      {/* Sankey Chart */}
-      <ProductionFlowChart
-        nodes={flowData?.nodes || []}
-        links={flowData?.links || []}
-        isLoading={isLoadingFlow}
-      />
+          {/* Still show the Sankey for single order context */}
+          <ProductionFlowChart
+            nodes={flowData?.nodes || []}
+            links={flowData?.links || []}
+            isLoading={isLoadingFlow}
+          />
+        </>
+      ) : (
+        /* Aggregate Mode - Original View */
+        <>
+          {/* KPIs */}
+          <ProductionFlowKPIs
+            summary={flowData?.summary || emptySummary}
+            isLoading={isLoadingFlow}
+          />
 
-      {/* Detail Table */}
-      <ProductionFlowTable
-        details={details || []}
-        isLoading={isLoadingDetails}
-      />
+          {/* Sankey Chart */}
+          <ProductionFlowChart
+            nodes={flowData?.nodes || []}
+            links={flowData?.links || []}
+            isLoading={isLoadingFlow}
+          />
+
+          {/* Detail Table */}
+          <ProductionFlowTable
+            details={details || []}
+            isLoading={isLoadingDetails}
+          />
+        </>
+      )}
     </div>
   );
 }
