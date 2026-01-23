@@ -10,6 +10,8 @@ import {
   Layers,
   ClipboardList,
   Scale,
+  Cog,
+  PackageCheck,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -47,6 +49,8 @@ const warehouseItems = [
 const productionItems = [
   { title: "Zlecenia", url: "/production/orders", icon: ClipboardList },
   { title: "Terminal Wagowy", url: "/production/terminal", icon: Scale },
+  { title: "Terminal Masowni", url: "/production/tumbler", icon: Cog },
+  { title: "Paletyzacja", url: "/production/palletization", icon: PackageCheck },
 ];
 
 const hrItems = [
