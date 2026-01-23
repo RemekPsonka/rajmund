@@ -32,6 +32,7 @@ import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 import { useContractors } from "@/hooks/useContractors";
 import { usePackagingBalances, usePackagingTransactions } from "@/hooks/usePackaging";
+import { ExportButton } from "@/components/ExportButton";
 
 const PACKAGING_TYPES = ["E2", "H1", "Paleta EUR", "Kosz", "Karton"];
 
@@ -71,6 +72,29 @@ export default function PackagingBalancePage() {
 
   const isLoading = loadingContractors || loadingBalances;
 
+  // Export data
+  const exportData = filteredContractors?.map((c) => ({
+    name: c.name,
+    type: [c.is_supplier && "Dostawca", c.is_customer && "Odbiorca", c.is_logistics && "Logistyka"].filter(Boolean).join(", "),
+    e2: String(getBalance(c.id, "E2")),
+    h1: String(getBalance(c.id, "H1")),
+    paleta_eur: String(getBalance(c.id, "Paleta EUR")),
+    kosz: String(getBalance(c.id, "Kosz")),
+    karton: String(getBalance(c.id, "Karton")),
+    suma: String(getTotalBalance(c.id)),
+  })) || [];
+
+  const exportColumns: { key: keyof typeof exportData[0]; header: string }[] = [
+    { key: "name", header: "Kontrahent" },
+    { key: "type", header: "Typ" },
+    { key: "e2", header: "E2" },
+    { key: "h1", header: "H1" },
+    { key: "paleta_eur", header: "Paleta EUR" },
+    { key: "kosz", header: "Kosz" },
+    { key: "karton", header: "Karton" },
+    { key: "suma", header: "Suma" },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -80,10 +104,18 @@ export default function PackagingBalancePage() {
             Rozliczenia pojemników E2, palet i innych opakowań z kontrahentami
           </p>
         </div>
-        <Button onClick={() => setTransactionDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nowa transakcja
-        </Button>
+        <div className="flex gap-2">
+          <ExportButton
+            data={exportData}
+            columns={exportColumns}
+            filename={`saldo-opakowan-${format(new Date(), "yyyy-MM-dd")}`}
+            disabled={isLoading}
+          />
+          <Button onClick={() => setTransactionDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nowa transakcja
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}

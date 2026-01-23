@@ -5,7 +5,6 @@ import {
   Truck,
   Search,
   Eye,
-  Package,
   Clock,
   CheckCircle2,
   Loader2,
@@ -14,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -49,6 +48,7 @@ import {
 } from "@/hooks/useShipments";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
+import { ExportButton } from "@/components/ExportButton";
 
 const statusConfig: Record<ShipmentStatus, { label: string; icon: React.ElementType; color: string }> = {
   Planning: { label: "Planowanie", icon: Clock, color: "bg-blue-100 text-blue-700" },
@@ -138,6 +138,31 @@ export default function ShipmentsPage() {
     setFormDispatchDate(new Date().toISOString().slice(0, 10));
   };
 
+  // Export data preparation
+  const exportData = filteredShipments?.map((shipment) => ({
+    shipment_number: shipment.shipment_number,
+    dispatch_date: format(new Date(shipment.dispatch_date), "dd.MM.yyyy", { locale: pl }),
+    customer_name: shipment.customer?.name || "",
+    driver_name: shipment.driver_name || "",
+    truck_plates: shipment.truck_plates || "",
+    trailer_plates: shipment.trailer_plates || "",
+    total_net_weight: `${shipment.total_net_weight.toFixed(1)} kg`,
+    pallets_count: String(shipment.pallets_count),
+    status: statusConfig[shipment.status]?.label || shipment.status,
+  })) || [];
+
+  const exportColumns: { key: keyof typeof exportData[0]; header: string }[] = [
+    { key: "shipment_number", header: "Nr wysyłki" },
+    { key: "dispatch_date", header: "Data" },
+    { key: "customer_name", header: "Klient" },
+    { key: "driver_name", header: "Kierowca" },
+    { key: "truck_plates", header: "Nr rej. ciągnika" },
+    { key: "trailer_plates", header: "Nr rej. naczepy" },
+    { key: "total_net_weight", header: "Waga netto" },
+    { key: "pallets_count", header: "Palety" },
+    { key: "status", header: "Status" },
+  ];
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -148,10 +173,18 @@ export default function ShipmentsPage() {
             Zarządzaj transportami i dokumentami wysyłkowymi
           </p>
         </div>
-        <Button onClick={() => setShowNewDialog(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Nowa wysyłka
-        </Button>
+        <div className="flex gap-2">
+          <ExportButton
+            data={exportData}
+            columns={exportColumns}
+            filename={`wysylki-${format(new Date(), "yyyy-MM-dd")}`}
+            disabled={isLoading}
+          />
+          <Button onClick={() => setShowNewDialog(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Nowa wysyłka
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}

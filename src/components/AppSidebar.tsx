@@ -26,11 +26,19 @@ import {
   UserCog,
   Briefcase,
   Shield,
+  Bell,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { useAlerts } from "@/hooks/useAlerts";
+import { Badge } from "@/components/ui/badge";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 import {
   Sidebar,
@@ -104,6 +112,7 @@ export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
+  const { data: alertsData } = useAlerts();
 
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
@@ -122,7 +131,7 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
-      <div className="flex h-14 items-center border-b border-sidebar-border px-4">
+      <div className="flex h-14 items-center justify-between border-b border-sidebar-border px-4">
         {!collapsed && (
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
@@ -135,6 +144,52 @@ export function AppSidebar() {
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary mx-auto">
             <span className="text-sm font-bold text-primary-foreground">N</span>
           </div>
+        )}
+        
+        {/* Alert Bell */}
+        {!collapsed && alertsData && alertsData.totalCount > 0 && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className="relative p-1 rounded-md hover:bg-sidebar-accent transition-colors">
+                <Bell className="h-5 w-5 text-sidebar-foreground" />
+                <Badge
+                  variant={alertsData.criticalCount > 0 ? "destructive" : "secondary"}
+                  className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-[10px]"
+                >
+                  {alertsData.totalCount}
+                </Badge>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80" align="end">
+              <div className="space-y-2">
+                <h4 className="font-semibold text-sm">Alerty</h4>
+                {alertsData.alerts.map((alert) => (
+                  <div
+                    key={alert.id}
+                    className="flex items-start gap-3 p-2 rounded-md hover:bg-accent cursor-pointer transition-colors"
+                    onClick={() => alert.link && navigate(alert.link)}
+                  >
+                    <Badge
+                      variant={
+                        alert.severity === "critical"
+                          ? "destructive"
+                          : alert.severity === "warning"
+                          ? "secondary"
+                          : "outline"
+                      }
+                      className="mt-0.5"
+                    >
+                      {alert.count}
+                    </Badge>
+                    <div>
+                      <p className="text-sm font-medium">{alert.title}</p>
+                      <p className="text-xs text-muted-foreground">{alert.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
         )}
       </div>
 
