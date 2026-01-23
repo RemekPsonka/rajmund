@@ -363,14 +363,14 @@ export default function UsersPage() {
                 <div className="space-y-2">
                   <Label>Firma (opcjonalnie)</Label>
                   <Select
-                    value={newRoleCompany}
-                    onValueChange={setNewRoleCompany}
+                    value={newRoleCompany || "__all__"}
+                    onValueChange={(val) => setNewRoleCompany(val === "__all__" ? "" : val)}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Wszystkie firmy" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Wszystkie firmy</SelectItem>
+                      <SelectItem value="__all__">Wszystkie firmy</SelectItem>
                       {companies?.map((c) => (
                         <SelectItem key={c.id} value={c.id}>
                           {c.name}
@@ -384,14 +384,14 @@ export default function UsersPage() {
                   <div className="space-y-2">
                     <Label>Zakład (opcjonalnie)</Label>
                     <Select
-                      value={newRoleFacility}
-                      onValueChange={setNewRoleFacility}
+                      value={newRoleFacility || "__all__"}
+                      onValueChange={(val) => setNewRoleFacility(val === "__all__" ? "" : val)}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Wszystkie zakłady" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Wszystkie zakłady</SelectItem>
+                        <SelectItem value="__all__">Wszystkie zakłady</SelectItem>
                         {facilities
                           ?.filter((f) => f.company_id === newRoleCompany)
                           .map((f) => (
@@ -500,12 +500,15 @@ export default function UsersPage() {
             {inviteRole !== "global_admin" && (
               <div className="space-y-2">
                 <Label>Firma (opcjonalnie)</Label>
-                <Select value={inviteCompany} onValueChange={setInviteCompany}>
+                <Select
+                  value={inviteCompany || "__all__"}
+                  onValueChange={(val) => setInviteCompany(val === "__all__" ? "" : val)}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Wszystkie firmy" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Wszystkie firmy</SelectItem>
+                    <SelectItem value="__all__">Wszystkie firmy</SelectItem>
                     {companies?.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         {c.name}
