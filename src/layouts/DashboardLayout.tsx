@@ -22,9 +22,15 @@ const routeNames: Record<string, string> = {
   "/warehouse/deliveries": "Przyjęcia (PZ)",
   "/warehouse/deliveries/new": "Nowa dostawa",
   "/warehouse/batches": "Ewidencja Partii",
+  "/warehouse/transfers": "Przesunięcia (MM)",
+  "/warehouse/transfers/new": "Nowe przesunięcie",
+  "/warehouse/packaging": "Saldo Opakowań",
   "/production": "Produkcja",
   "/production/orders": "Zlecenia",
   "/production/terminal": "Terminal Wagowy",
+  "/production/tumbler": "Terminal Masowni",
+  "/production/palletization": "Paletyzacja",
+  "/shipping": "Wysyłki",
   "/settings": "Ustawienia",
 };
 

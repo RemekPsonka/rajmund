@@ -16,6 +16,8 @@ import {
   FlaskConical,
   HeartPulse,
   LogOut,
+  ArrowRightLeft,
+  Boxes,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -50,6 +52,8 @@ const catalogItems = [
 const warehouseItems = [
   { title: "Przyjęcia (PZ)", url: "/warehouse/deliveries", icon: FileInput },
   { title: "Ewidencja Partii", url: "/warehouse/batches", icon: Layers },
+  { title: "Przesunięcia (MM)", url: "/warehouse/transfers", icon: ArrowRightLeft },
+  { title: "Saldo Opakowań", url: "/warehouse/packaging", icon: Boxes },
 ];
 
 const productionItems = [
