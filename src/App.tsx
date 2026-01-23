@@ -19,6 +19,7 @@ import TransfersPage from "./pages/warehouse/TransfersPage";
 import NewTransferPage from "./pages/warehouse/NewTransferPage";
 import PackagingBalancePage from "./pages/warehouse/PackagingBalancePage";
 import ProductionOrdersPage from "./pages/production/ProductionOrdersPage";
+import ProductionOrderDetailPage from "./pages/production/ProductionOrderDetailPage";
 import ProductionAnalyticsPage from "./pages/production/ProductionAnalyticsPage";
 import WeighingTerminalPage from "./pages/production/WeighingTerminalPage";
 import TumblerTerminalPage from "./pages/production/TumblerTerminalPage";
@@ -59,6 +60,7 @@ const App = () => (
               <Route path="/warehouse/transfers/new" element={<NewTransferPage />} />
               <Route path="/warehouse/packaging" element={<PackagingBalancePage />} />
               <Route path="/production/orders" element={<ProductionOrdersPage />} />
+              <Route path="/production/orders/:id" element={<ProductionOrderDetailPage />} />
               <Route path="/production/analytics" element={<ProductionAnalyticsPage />} />
               <Route path="/production/palletization" element={<PalletizationPage />} />
               <Route path="/shipping" element={<ShipmentsPage />} />
