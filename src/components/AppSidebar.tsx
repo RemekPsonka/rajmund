@@ -24,6 +24,8 @@ import {
   Box,
   Users,
   UserCog,
+  Briefcase,
+  Shield,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -85,6 +87,8 @@ const devItems = [
 
 const settingsItems = [
   { title: "Użytkownicy", url: "/settings/users", icon: UserCog },
+  { title: "Uprawnienia", url: "/settings/permissions", icon: Shield },
+  { title: "Stanowiska", url: "/settings/job-positions", icon: Briefcase },
   { title: "Lokalizacje", url: "/settings/locations", icon: MapPin },
   { title: "Urządzenia", url: "/settings/devices", icon: Scale },
   { title: "Opakowania", url: "/settings/packaging-types", icon: Box },

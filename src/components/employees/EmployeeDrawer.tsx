@@ -1,10 +1,12 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { Plus } from "lucide-react";
 import { useCreateEmployee, useUpdateEmployee, type Employee } from "@/hooks/useEmployees";
 import { useFacilities } from "@/hooks/useFacilities";
 import { useCompanies } from "@/hooks/useCompanies";
+import { useJobPositions, useCreateJobPosition } from "@/hooks/useJobPositions";
 import {
   Drawer,
   DrawerClose,
@@ -16,7 +18,6 @@ import {
 } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -26,6 +27,15 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 const employeeSchema = z.object({
   first_name: z.string().min(1, "Imię jest wymagane"),
@@ -47,8 +57,12 @@ interface EmployeeDrawerProps {
 export function EmployeeDrawer({ open, onClose, employee }: EmployeeDrawerProps) {
   const createEmployee = useCreateEmployee();
   const updateEmployee = useUpdateEmployee();
+  const createJobPosition = useCreateJobPosition();
   const { data: companies } = useCompanies();
   const { data: facilities } = useFacilities();
+  
+  const [newPositionDialogOpen, setNewPositionDialogOpen] = useState(false);
+  const [newPositionName, setNewPositionName] = useState("");
 
   const form = useForm<EmployeeFormValues>({
     resolver: zodResolver(employeeSchema),
@@ -64,6 +78,9 @@ export function EmployeeDrawer({ open, onClose, employee }: EmployeeDrawerProps)
 
   const selectedCompanyId = form.watch("company_id");
   const filteredFacilities = facilities?.filter((f) => f.company_id === selectedCompanyId);
+  
+  // Fetch job positions for the selected company
+  const { data: jobPositions } = useJobPositions(selectedCompanyId);
 
   useEffect(() => {
     if (employee) {
@@ -107,31 +124,86 @@ export function EmployeeDrawer({ open, onClose, employee }: EmployeeDrawerProps)
     form.reset();
   };
 
+  const handleAddPosition = async () => {
+    if (!newPositionName || !selectedCompanyId) return;
+    
+    await createJobPosition.mutateAsync({
+      company_id: selectedCompanyId,
+      name: newPositionName,
+    });
+    
+    // Set the new position as selected
+    form.setValue("job_position", newPositionName);
+    setNewPositionDialogOpen(false);
+    setNewPositionName("");
+  };
+
   const isPending = createEmployee.isPending || updateEmployee.isPending;
 
   return (
-    <Drawer open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DrawerContent>
-        <div className="mx-auto w-full max-w-lg">
-          <DrawerHeader>
-            <DrawerTitle>{employee ? "Edytuj pracownika" : "Dodaj pracownika"}</DrawerTitle>
-            <DrawerDescription>
-              {employee ? "Zaktualizuj dane pracownika" : "Wprowadź dane nowego pracownika"}
-            </DrawerDescription>
-          </DrawerHeader>
+    <>
+      <Drawer open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+        <DrawerContent>
+          <div className="mx-auto w-full max-w-lg">
+            <DrawerHeader>
+              <DrawerTitle>{employee ? "Edytuj pracownika" : "Dodaj pracownika"}</DrawerTitle>
+              <DrawerDescription>
+                {employee ? "Zaktualizuj dane pracownika" : "Wprowadź dane nowego pracownika"}
+              </DrawerDescription>
+            </DrawerHeader>
 
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 p-4">
-              <div className="grid grid-cols-2 gap-4">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 p-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="first_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Imię</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Jan" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="last_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nazwisko</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Kowalski" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
                 <FormField
                   control={form.control}
-                  name="first_name"
+                  name="company_id"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Imię</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Jan" {...field} />
-                      </FormControl>
+                      <FormLabel>Spółka</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Wybierz spółkę" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {companies?.map((company) => (
+                            <SelectItem key={company.id} value={company.id}>
+                              {company.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -139,114 +211,146 @@ export function EmployeeDrawer({ open, onClose, employee }: EmployeeDrawerProps)
 
                 <FormField
                   control={form.control}
-                  name="last_name"
+                  name="job_position"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Nazwisko</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Kowalski" {...field} />
-                      </FormControl>
+                      <FormLabel>Stanowisko</FormLabel>
+                      <div className="flex gap-2">
+                        <Select 
+                          onValueChange={field.onChange} 
+                          value={field.value || "__custom__"}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="flex-1">
+                              <SelectValue placeholder="Wybierz stanowisko" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {jobPositions?.map((pos) => (
+                              <SelectItem key={pos.id} value={pos.name}>
+                                {pos.name}
+                                {pos.department && (
+                                  <span className="text-muted-foreground ml-2">
+                                    ({pos.department})
+                                  </span>
+                                )}
+                              </SelectItem>
+                            ))}
+                            {(!jobPositions || jobPositions.length === 0) && (
+                              <SelectItem value="__custom__" disabled>
+                                Brak stanowisk - dodaj nowe
+                              </SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => setNewPositionDialogOpen(true)}
+                          disabled={!selectedCompanyId}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              </div>
 
-              <FormField
-                control={form.control}
-                name="job_position"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Stanowisko</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Operator produkcji" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                <FormField
+                  control={form.control}
+                  name="facility_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Zakład (opcjonalnie)</FormLabel>
+                      <Select 
+                        onValueChange={(val) => field.onChange(val === "__none__" ? "" : val)} 
+                        value={field.value || "__none__"}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Wybierz zakład" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="__none__">Brak przypisania</SelectItem>
+                          {filteredFacilities?.map((facility) => (
+                            <SelectItem key={facility.id} value={facility.id}>
+                              {facility.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <FormField
-                control={form.control}
-                name="company_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Spółka</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                <FormField
+                  control={form.control}
+                  name="is_active"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-base">Aktywny</FormLabel>
+                        <p className="text-sm text-muted-foreground">
+                          Nieaktywni pracownicy nie mogą logować się do terminali
+                        </p>
+                      </div>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Wybierz spółkę" />
-                        </SelectTrigger>
+                        <Switch checked={field.value} onCheckedChange={field.onChange} />
                       </FormControl>
-                      <SelectContent>
-                        {companies?.map((company) => (
-                          <SelectItem key={company.id} value={company.id}>
-                            {company.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                    </FormItem>
+                  )}
+                />
 
-              <FormField
-                control={form.control}
-                name="facility_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Zakład (opcjonalnie)</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Wybierz zakład" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="">Brak przypisania</SelectItem>
-                        {filteredFacilities?.map((facility) => (
-                          <SelectItem key={facility.id} value={facility.id}>
-                            {facility.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                <DrawerFooter className="px-0">
+                  <Button type="submit" disabled={isPending}>
+                    {employee ? "Zapisz zmiany" : "Dodaj pracownika"}
+                  </Button>
+                  <DrawerClose asChild>
+                    <Button variant="outline">Anuluj</Button>
+                  </DrawerClose>
+                </DrawerFooter>
+              </form>
+            </Form>
+          </div>
+        </DrawerContent>
+      </Drawer>
 
-              <FormField
-                control={form.control}
-                name="is_active"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                    <div className="space-y-0.5">
-                      <FormLabel className="text-base">Aktywny</FormLabel>
-                      <p className="text-sm text-muted-foreground">
-                        Nieaktywni pracownicy nie mogą logować się do terminali
-                      </p>
-                    </div>
-                    <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
+      {/* Add New Position Dialog */}
+      <Dialog open={newPositionDialogOpen} onOpenChange={setNewPositionDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nowe stanowisko</DialogTitle>
+            <DialogDescription>
+              Dodaj nowe stanowisko pracy do słownika
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Nazwa stanowiska</Label>
+              <Input
+                value={newPositionName}
+                onChange={(e) => setNewPositionName(e.target.value)}
+                placeholder="np. Trybowszczyk"
               />
-
-              <DrawerFooter className="px-0">
-                <Button type="submit" disabled={isPending}>
-                  {employee ? "Zapisz zmiany" : "Dodaj pracownika"}
-                </Button>
-                <DrawerClose asChild>
-                  <Button variant="outline">Anuluj</Button>
-                </DrawerClose>
-              </DrawerFooter>
-            </form>
-          </Form>
-        </div>
-      </DrawerContent>
-    </Drawer>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNewPositionDialogOpen(false)}>
+              Anuluj
+            </Button>
+            <Button 
+              onClick={handleAddPosition} 
+              disabled={!newPositionName || createJobPosition.isPending}
+            >
+              Dodaj
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

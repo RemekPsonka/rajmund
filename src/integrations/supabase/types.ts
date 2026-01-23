@@ -303,6 +303,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           job_position: string
+          job_position_id: string | null
           last_name: string
           pin_code_hash: string | null
           qr_login_code: string
@@ -318,6 +319,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           job_position: string
+          job_position_id?: string | null
           last_name: string
           pin_code_hash?: string | null
           qr_login_code: string
@@ -333,6 +335,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           job_position?: string
+          job_position_id?: string | null
           last_name?: string
           pin_code_hash?: string | null
           qr_login_code?: string
@@ -351,6 +354,13 @@ export type Database = {
             columns: ["facility_id"]
             isOneToOne: false
             referencedRelation: "t_facilities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_employees_job_position_id_fkey"
+            columns: ["job_position_id"]
+            isOneToOne: false
+            referencedRelation: "t_job_positions"
             referencedColumns: ["id"]
           },
         ]
@@ -458,6 +468,47 @@ export type Database = {
             columns: ["facility_id"]
             isOneToOne: false
             referencedRelation: "t_facilities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      t_job_positions: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          department: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          department?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          department?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "t_job_positions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "t_companies"
             referencedColumns: ["id"]
           },
         ]
@@ -990,6 +1041,42 @@ export type Database = {
           },
         ]
       }
+      t_role_permissions: {
+        Row: {
+          can_create: boolean | null
+          can_delete: boolean | null
+          can_read: boolean | null
+          can_update: boolean | null
+          created_at: string | null
+          id: string
+          resource: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at: string | null
+        }
+        Insert: {
+          can_create?: boolean | null
+          can_delete?: boolean | null
+          can_read?: boolean | null
+          can_update?: boolean | null
+          created_at?: string | null
+          id?: string
+          resource: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at?: string | null
+        }
+        Update: {
+          can_create?: boolean | null
+          can_delete?: boolean | null
+          can_read?: boolean | null
+          can_update?: boolean | null
+          created_at?: string | null
+          id?: string
+          resource?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       t_shipment_items: {
         Row: {
           batch_id: string | null
@@ -1483,6 +1570,10 @@ export type Database = {
           waste_percentage: number
           yield_percentage: number
         }[]
+      }
+      check_permission: {
+        Args: { _action: string; _resource: string; _user_id: string }
+        Returns: boolean
       }
       close_production_order_with_batches: {
         Args: { p_order_id: string }
