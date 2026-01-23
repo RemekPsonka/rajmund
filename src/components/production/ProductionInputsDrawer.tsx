@@ -79,7 +79,7 @@ export const ProductionInputsDrawer = React.forwardRef<HTMLDivElement, Productio
     defaultValues: {
       batch_id: "",
       weight: undefined,
-      direction: "",
+      direction: "SWIEZE",
     },
   });
 
