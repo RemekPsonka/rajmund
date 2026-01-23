@@ -413,8 +413,8 @@ export default function PalletizationPage() {
                                 </div>
                               </TableCell>
                               <TableCell>
-                                {log.employee 
-                                  ? `${log.employee.first_name} ${log.employee.last_name}`
+                                {(log as { weighing_employee?: { first_name: string; last_name: string } }).weighing_employee 
+                                  ? `${(log as { weighing_employee: { first_name: string; last_name: string } }).weighing_employee.first_name} ${(log as { weighing_employee: { first_name: string; last_name: string } }).weighing_employee.last_name}`
                                   : "-"
                                 }
                               </TableCell>

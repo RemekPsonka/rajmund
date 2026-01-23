@@ -238,6 +238,60 @@ export type Database = {
           },
         ]
       }
+      t_devices: {
+        Row: {
+          code: string
+          company_id: string
+          created_at: string | null
+          device_type: string
+          facility_id: string | null
+          id: string
+          is_active: boolean | null
+          metadata: Json | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          code: string
+          company_id: string
+          created_at?: string | null
+          device_type: string
+          facility_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          metadata?: Json | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          code?: string
+          company_id?: string
+          created_at?: string | null
+          device_type?: string
+          facility_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          metadata?: Json | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "t_devices_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "t_companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_devices_facility_id_fkey"
+            columns: ["facility_id"]
+            isOneToOne: false
+            referencedRelation: "t_facilities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       t_employees: {
         Row: {
           company_id: string
@@ -536,6 +590,7 @@ export type Database = {
           output_batch_id: string | null
           packaging_count: number | null
           packaging_type: string | null
+          prepared_by_employee_id: string | null
           product_id: string
           production_order_id: string
           scale_device_id: string | null
@@ -552,6 +607,7 @@ export type Database = {
           output_batch_id?: string | null
           packaging_count?: number | null
           packaging_type?: string | null
+          prepared_by_employee_id?: string | null
           product_id: string
           production_order_id: string
           scale_device_id?: string | null
@@ -568,6 +624,7 @@ export type Database = {
           output_batch_id?: string | null
           packaging_count?: number | null
           packaging_type?: string | null
+          prepared_by_employee_id?: string | null
           product_id?: string
           production_order_id?: string
           scale_device_id?: string | null
@@ -577,6 +634,13 @@ export type Database = {
           weight_tare?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_production_logs_scale_device"
+            columns: ["scale_device_id"]
+            isOneToOne: false
+            referencedRelation: "t_devices"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "t_production_logs_employee_id_fkey"
             columns: ["employee_id"]
@@ -596,6 +660,13 @@ export type Database = {
             columns: ["output_batch_id"]
             isOneToOne: false
             referencedRelation: "t_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_production_logs_prepared_by_employee_id_fkey"
+            columns: ["prepared_by_employee_id"]
+            isOneToOne: false
+            referencedRelation: "t_employees"
             referencedColumns: ["id"]
           },
           {
