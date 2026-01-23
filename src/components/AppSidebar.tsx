@@ -20,6 +20,9 @@ import {
   Boxes,
   MapPin,
   GitBranch,
+  Ruler,
+  ListChecks,
+  Box,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -81,6 +84,11 @@ const devItems = [
 
 const settingsItems = [
   { title: "Lokalizacje", url: "/settings/locations", icon: MapPin },
+  { title: "Urządzenia", url: "/settings/devices", icon: Scale },
+  { title: "Opakowania", url: "/settings/packaging-types", icon: Box },
+  { title: "Jednostki miary", url: "/settings/units", icon: Ruler },
+  { title: "Receptury", url: "/settings/recipes", icon: FlaskConical },
+  { title: "Szablony czynności", url: "/settings/task-templates", icon: ListChecks },
   { title: "Ustawienia", url: "/settings", icon: Settings },
 ];
 

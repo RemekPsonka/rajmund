@@ -27,6 +27,11 @@ import PalletizationPage from "./pages/production/PalletizationPage";
 import ShipmentsPage from "./pages/shipping/ShipmentsPage";
 import ShipmentDetailPage from "./pages/shipping/ShipmentDetailPage";
 import StorageLocationsPage from "./pages/settings/StorageLocationsPage";
+import DevicesPage from "./pages/settings/DevicesPage";
+import PackagingTypesPage from "./pages/settings/PackagingTypesPage";
+import UnitsOfMeasurePage from "./pages/settings/UnitsOfMeasurePage";
+import RecipesPage from "./pages/settings/RecipesPage";
+import TaskTemplatesPage from "./pages/settings/TaskTemplatesPage";
 import DevToolsPage from "./pages/dev/DevToolsPage";
 import SystemHealthPage from "./pages/dev/SystemHealthPage";
 import SettingsPage from "./pages/SettingsPage";
@@ -68,6 +73,11 @@ const App = () => (
               <Route path="/dev-tools" element={<DevToolsPage />} />
               <Route path="/system-health" element={<SystemHealthPage />} />
               <Route path="/settings/locations" element={<StorageLocationsPage />} />
+              <Route path="/settings/devices" element={<DevicesPage />} />
+              <Route path="/settings/packaging-types" element={<PackagingTypesPage />} />
+              <Route path="/settings/units" element={<UnitsOfMeasurePage />} />
+              <Route path="/settings/recipes" element={<RecipesPage />} />
+              <Route path="/settings/task-templates" element={<TaskTemplatesPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
           </Route>
