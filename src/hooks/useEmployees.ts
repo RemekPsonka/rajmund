@@ -22,11 +22,11 @@ export interface Employee {
 
 export interface EmployeeFormData {
   company_id: string;
-  facility_id?: string;
+  facility_id?: string | null;
   first_name: string;
   last_name: string;
   job_position: string;
-  qr_login_code: string;
+  qr_login_code?: string;
   is_active?: boolean;
   contract_type?: ContractType;
   hourly_rate?: number;
@@ -75,10 +75,13 @@ export function useCreateEmployee() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (formData: EmployeeFormData) => {
+    mutationFn: async (formData: Omit<EmployeeFormData, 'qr_login_code'>) => {
+      // Generate QR code automatically
+      const qr_login_code = `EMP-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      
       const { data, error } = await supabase
         .from("t_employees")
-        .insert(formData)
+        .insert({ ...formData, qr_login_code })
         .select()
         .single();
 
@@ -99,7 +102,7 @@ export function useUpdateEmployee() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, ...formData }: EmployeeFormData & { id: string }) => {
+    mutationFn: async ({ id, ...formData }: Omit<EmployeeFormData, 'qr_login_code'> & { id: string }) => {
       const { data, error } = await supabase
         .from("t_employees")
         .update(formData)

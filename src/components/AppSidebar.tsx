@@ -15,9 +15,12 @@ import {
   Truck,
   FlaskConical,
   HeartPulse,
+  LogOut,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 import {
   Sidebar,
@@ -77,10 +80,22 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const navigate = useNavigate();
+  const { signOut, user } = useAuth();
 
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
     return location.pathname.startsWith(path);
+  };
+
+  const handleSignOut = async () => {
+    const { error } = await signOut();
+    if (error) {
+      toast.error("Błąd wylogowania: " + error.message);
+    } else {
+      toast.success("Wylogowano");
+      navigate("/auth");
+    }
   };
 
   return (
@@ -323,6 +338,23 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+              
+              {/* Logout button */}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={handleSignOut}
+                  tooltip="Wyloguj"
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span>Wyloguj</span>
+                  {!collapsed && user && (
+                    <span className="ml-auto text-xs text-muted-foreground truncate max-w-[100px]">
+                      {user.email}
+                    </span>
+                  )}
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
