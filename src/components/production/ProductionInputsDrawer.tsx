@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -59,7 +60,8 @@ interface ProductionInputsDrawerProps {
   orderId: string | null;
 }
 
-export function ProductionInputsDrawer({ open, onClose, orderId }: ProductionInputsDrawerProps) {
+export const ProductionInputsDrawer = React.forwardRef<HTMLDivElement, ProductionInputsDrawerProps>(
+  function ProductionInputsDrawer({ open, onClose, orderId }, ref) {
   const { data: order, isLoading: loadingOrder } = useProductionOrder(orderId || undefined);
   const { data: inputs, isLoading: loadingInputs } = useProductionInputs(orderId || undefined);
   const { data: batches } = useBatches();
@@ -248,4 +250,6 @@ export function ProductionInputsDrawer({ open, onClose, orderId }: ProductionInp
       </DrawerContent>
     </Drawer>
   );
-}
+});
+
+ProductionInputsDrawer.displayName = "ProductionInputsDrawer";

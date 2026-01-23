@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { Plus, Search, Users, QrCode, Filter } from "lucide-react";
-import { useEmployees } from "@/hooks/useEmployees";
+import { Plus, Search, Users, QrCode, Filter, Pencil } from "lucide-react";
+import { useEmployees, type Employee } from "@/hooks/useEmployees";
 import { useFacilities } from "@/hooks/useFacilities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmployeeDrawer } from "@/components/employees/EmployeeDrawer";
 import {
   Select,
   SelectContent,
@@ -36,6 +37,8 @@ export default function EmployeesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<{ name: string; qrCode: string } | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
 
   const { data: employees, isLoading } = useEmployees(facilityFilter);
   const { data: facilities } = useFacilities();
@@ -55,6 +58,21 @@ export default function EmployeesPage() {
     setQrModalOpen(true);
   };
 
+  const handleAddEmployee = () => {
+    setEditingEmployee(null);
+    setDrawerOpen(true);
+  };
+
+  const handleEditEmployee = (employee: Employee) => {
+    setEditingEmployee(employee);
+    setDrawerOpen(true);
+  };
+
+  const handleDrawerClose = () => {
+    setDrawerOpen(false);
+    setEditingEmployee(null);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -62,7 +80,7 @@ export default function EmployeesPage() {
           <h1 className="text-2xl font-semibold text-foreground">Pracownicy</h1>
           <p className="text-muted-foreground">Zarządzaj pracownikami operacyjnymi</p>
         </div>
-        <Button className="gap-2" disabled>
+        <Button className="gap-2" onClick={handleAddEmployee}>
           <Plus className="h-4 w-4" />
           Dodaj pracownika
         </Button>
@@ -112,6 +130,12 @@ export default function EmployeesPage() {
             <p className="text-sm text-muted-foreground">
               {searchQuery ? "Nie znaleziono pasujących wyników" : "Dodaj pierwszego pracownika"}
             </p>
+            {!searchQuery && (
+              <Button className="mt-4" onClick={handleAddEmployee}>
+                <Plus className="mr-2 h-4 w-4" />
+                Dodaj pracownika
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -138,10 +162,13 @@ export default function EmployeesPage() {
                         {employee.is_active ? "Aktywny" : "Nieaktywny"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right space-x-2">
+                      <Button variant="ghost" size="sm" onClick={() => handleEditEmployee(employee)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
                       <Button variant="outline" size="sm" onClick={() => handleGenerateQR(employee)}>
                         <QrCode className="mr-2 h-4 w-4" />
-                        Generuj Kartę
+                        Karta QR
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -151,6 +178,12 @@ export default function EmployeesPage() {
           </CardContent>
         </Card>
       )}
+
+      <EmployeeDrawer 
+        open={drawerOpen} 
+        onClose={handleDrawerClose} 
+        employee={editingEmployee} 
+      />
 
       <Dialog open={qrModalOpen} onOpenChange={setQrModalOpen}>
         <DialogContent className="sm:max-w-md">
