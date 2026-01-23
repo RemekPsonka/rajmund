@@ -37,15 +37,18 @@ import { toast } from "sonner";
 import { useCompanies } from "@/hooks/useCompanies";
 import { useFacilities } from "@/hooks/useFacilities";
 import { useBatches } from "@/hooks/useBatches";
+import { useStorageLocations, getLocationTypeLabel } from "@/hooks/useStorageLocations";
 import { 
   useCreateWarehouseMovement, 
   useCreateMovementItem,
   generateDocumentNumber 
 } from "@/hooks/useWarehouseMovements";
+import { supabase } from "@/integrations/supabase/client";
 
 const formSchema = z.object({
   company_id: z.string().min(1, "Wybierz firmę"),
   facility_id: z.string().min(1, "Wybierz zakład"),
+  target_location_id: z.string().optional(),
   notes: z.string().optional(),
 });
 
@@ -58,6 +61,7 @@ interface SelectedBatch {
   quantity: number;
   transfer_quantity: number;
   unit: string;
+  current_location: string | null;
 }
 
 export default function NewTransferPage() {
@@ -76,12 +80,18 @@ export default function NewTransferPage() {
     defaultValues: {
       company_id: "",
       facility_id: "",
+      target_location_id: "",
       notes: "",
     },
   });
 
   const selectedCompanyId = form.watch("company_id");
+  const selectedFacilityId = form.watch("facility_id");
   const filteredFacilities = facilities?.filter(f => f.company_id === selectedCompanyId);
+  
+  // Storage locations for target facility
+  const { data: storageLocations } = useStorageLocations(selectedFacilityId || undefined);
+
 
   // Filter batches with available quantity
   const availableBatches = batches?.filter(b => 
@@ -100,6 +110,7 @@ export default function NewTransferPage() {
       quantity: batch.current_quantity,
       transfer_quantity: batch.current_quantity,
       unit: batch.product?.unit || "kg",
+      current_location: batch.location?.name || null,
     }]);
   };
 
@@ -140,6 +151,16 @@ export default function NewTransferPage() {
           batch_id: batch.batch_id,
           quantity: batch.transfer_quantity,
         });
+      }
+
+      // Update batch location if target location is specified
+      if (data.target_location_id) {
+        for (const batch of selectedBatches) {
+          await supabase
+            .from("t_batches")
+            .update({ location_id: data.target_location_id })
+            .eq("id", batch.batch_id);
+        }
       }
 
       toast.success("Przesunięcie MM zostało utworzone");
@@ -233,6 +254,35 @@ export default function NewTransferPage() {
 
                 <FormField
                   control={form.control}
+                  name="target_location_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Lokalizacja docelowa (opcjonalnie)</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        value={field.value}
+                        disabled={!selectedFacilityId}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Wybierz lokalizację" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {storageLocations?.map((location) => (
+                            <SelectItem key={location.id} value={location.id}>
+                              {location.name} ({getLocationTypeLabel(location.location_type)})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
                   name="notes"
                   render={({ field }) => (
                     <FormItem>
@@ -268,22 +318,25 @@ export default function NewTransferPage() {
             ) : (
               <div className="max-h-[300px] overflow-auto space-y-2">
                 {availableBatches.map((batch) => (
-                  <div 
-                    key={batch.id}
-                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer"
-                    onClick={() => handleAddBatch(batch)}
-                  >
-                    <div>
-                      <p className="font-mono text-sm font-medium">{batch.internal_batch_number}</p>
-                      <p className="text-sm text-muted-foreground">{batch.product?.name}</p>
+                    <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer"
+                      onClick={() => handleAddBatch(batch)}
+                    >
+                      <div>
+                        <p className="font-mono text-sm font-medium">{batch.internal_batch_number}</p>
+                        <p className="text-sm text-muted-foreground">{batch.product?.name}</p>
+                        {batch.location && (
+                          <Badge variant="outline" className="text-xs mt-1">
+                            📍 {batch.location.name}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <Badge variant="secondary">
+                          {batch.current_quantity.toFixed(1)} {batch.product?.unit}
+                        </Badge>
+                        <Plus className="h-4 w-4 mt-1 text-muted-foreground" />
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <Badge variant="secondary">
-                        {batch.current_quantity.toFixed(1)} {batch.product?.unit}
-                      </Badge>
-                      <Plus className="h-4 w-4 mt-1 text-muted-foreground" />
-                    </div>
-                  </div>
                 ))}
               </div>
             )}
@@ -314,6 +367,7 @@ export default function NewTransferPage() {
                 <TableRow>
                   <TableHead>Nr partii</TableHead>
                   <TableHead>Produkt</TableHead>
+                  <TableHead>Obecna lokalizacja</TableHead>
                   <TableHead>Dostępne</TableHead>
                   <TableHead>Do przesunięcia</TableHead>
                   <TableHead className="w-[50px]"></TableHead>
@@ -324,6 +378,13 @@ export default function NewTransferPage() {
                   <TableRow key={batch.batch_id}>
                     <TableCell className="font-mono">{batch.batch_number}</TableCell>
                     <TableCell>{batch.product_name}</TableCell>
+                    <TableCell>
+                      {batch.current_location ? (
+                        <Badge variant="outline" className="text-xs">{batch.current_location}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">-</span>
+                      )}
+                    </TableCell>
                     <TableCell>{batch.quantity.toFixed(1)} {batch.unit}</TableCell>
                     <TableCell>
                       <Input

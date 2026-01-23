@@ -46,10 +46,12 @@ import {
   useCreateProductionInput,
 } from "@/hooks/useProductionOrders";
 import { useBatches } from "@/hooks/useBatches";
+import { PROCESSING_DIRECTIONS } from "@/hooks/useStorageLocations";
 
 const inputSchema = z.object({
   batch_id: z.string().min(1, "Wybierz partię"),
   weight: z.coerce.number().min(0.01, "Podaj wagę"),
+  direction: z.string().optional(),
 });
 
 type InputFormValues = z.infer<typeof inputSchema>;
@@ -77,6 +79,7 @@ export const ProductionInputsDrawer = React.forwardRef<HTMLDivElement, Productio
     defaultValues: {
       batch_id: "",
       weight: undefined,
+      direction: "",
     },
   });
 
@@ -92,6 +95,7 @@ export const ProductionInputsDrawer = React.forwardRef<HTMLDivElement, Productio
         batch_id: values.batch_id,
         product_id: selectedBatch.product_id,
         weight: values.weight,
+        direction: values.direction || undefined,
       });
       form.reset();
     } catch {
@@ -164,6 +168,31 @@ export const ProductionInputsDrawer = React.forwardRef<HTMLDivElement, Productio
                         {" • "}Produkt: {selectedBatch.product?.name}
                       </div>
                     )}
+
+                    <FormField
+                      control={form.control}
+                      name="direction"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Kierunek przetwórstwa</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Wybierz kierunek (opcjonalnie)" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {PROCESSING_DIRECTIONS.map((dir) => (
+                                <SelectItem key={dir.value} value={dir.value}>
+                                  {dir.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
                     <div className="flex gap-4 items-end">
                       <FormField

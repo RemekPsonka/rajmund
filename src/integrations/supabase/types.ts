@@ -46,6 +46,7 @@ export type Database = {
           id: string
           initial_quantity: number
           internal_batch_number: string
+          location_id: string | null
           product_id: string
           production_date: string | null
           reception_date: string | null
@@ -61,6 +62,7 @@ export type Database = {
           id?: string
           initial_quantity: number
           internal_batch_number: string
+          location_id?: string | null
           product_id: string
           production_date?: string | null
           reception_date?: string | null
@@ -76,6 +78,7 @@ export type Database = {
           id?: string
           initial_quantity?: number
           internal_batch_number?: string
+          location_id?: string | null
           product_id?: string
           production_date?: string | null
           reception_date?: string | null
@@ -85,6 +88,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "t_batches_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "t_storage_locations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "t_batches_product_id_fkey"
             columns: ["product_id"]
@@ -467,6 +477,7 @@ export type Database = {
           batch_id: string
           created_at: string | null
           created_by: string | null
+          direction: string | null
           id: string
           product_id: string
           production_order_id: string
@@ -476,6 +487,7 @@ export type Database = {
           batch_id: string
           created_at?: string | null
           created_by?: string | null
+          direction?: string | null
           id?: string
           product_id: string
           production_order_id: string
@@ -485,6 +497,7 @@ export type Database = {
           batch_id?: string
           created_at?: string | null
           created_by?: string | null
+          direction?: string | null
           id?: string
           product_id?: string
           production_order_id?: string
@@ -967,6 +980,50 @@ export type Database = {
           },
           {
             foreignKeyName: "t_shipments_facility_id_fkey"
+            columns: ["facility_id"]
+            isOneToOne: false
+            referencedRelation: "t_facilities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      t_storage_locations: {
+        Row: {
+          created_at: string | null
+          facility_id: string
+          id: string
+          is_active: boolean | null
+          location_type: string
+          max_temp: number | null
+          min_temp: number | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          facility_id: string
+          id?: string
+          is_active?: boolean | null
+          location_type: string
+          max_temp?: number | null
+          min_temp?: number | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          facility_id?: string
+          id?: string
+          is_active?: boolean | null
+          location_type?: string
+          max_temp?: number | null
+          min_temp?: number | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "t_storage_locations_facility_id_fkey"
             columns: ["facility_id"]
             isOneToOne: false
             referencedRelation: "t_facilities"
