@@ -24,8 +24,10 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
-  History
+  History,
+  Plus
 } from "lucide-react";
+import { PackagingTransactionDialog } from "@/components/packaging/PackagingTransactionDialog";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 import { useContractors } from "@/hooks/useContractors";
@@ -37,6 +39,7 @@ export default function PackagingBalancePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedContractor, setSelectedContractor] = useState<{ id: string; name: string } | null>(null);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [transactionDialogOpen, setTransactionDialogOpen] = useState(false);
 
   const { data: contractors, isLoading: loadingContractors } = useContractors();
   const { data: balances, isLoading: loadingBalances } = usePackagingBalances();
@@ -70,11 +73,17 @@ export default function PackagingBalancePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Saldo Opakowań Zwrotnych</h1>
-        <p className="text-muted-foreground">
-          Rozliczenia pojemników E2, palet i innych opakowań z kontrahentami
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Saldo Opakowań Zwrotnych</h1>
+          <p className="text-muted-foreground">
+            Rozliczenia pojemników E2, palet i innych opakowań z kontrahentami
+          </p>
+        </div>
+        <Button onClick={() => setTransactionDialogOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Nowa transakcja
+        </Button>
       </div>
 
       {/* Summary Cards */}
@@ -286,6 +295,12 @@ export default function PackagingBalancePage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Transaction Dialog */}
+      <PackagingTransactionDialog
+        open={transactionDialogOpen}
+        onClose={() => setTransactionDialogOpen(false)}
+      />
     </div>
   );
 }
