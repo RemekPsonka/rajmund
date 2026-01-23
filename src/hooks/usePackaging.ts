@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export interface PackagingTransaction {
   id: string;
@@ -10,6 +11,17 @@ export interface PackagingTransaction {
   packaging_type: string;
   quantity: number;
   created_at: string;
+  comments: string | null;
+}
+
+export interface CreatePackagingTransactionData {
+  company_id: string;
+  contractor_id: string;
+  type: "Issued" | "Received";
+  packaging_type: string;
+  quantity: number;
+  shipment_id?: string;
+  comments?: string;
 }
 
 export function usePackagingBalances() {
@@ -72,5 +84,30 @@ export function useContractorPackagingBalance(contractorId: string | undefined, 
       return data as number;
     },
     enabled: !!contractorId,
+  });
+}
+
+export function useCreatePackagingTransaction() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: CreatePackagingTransactionData) => {
+      const { data: result, error } = await supabase
+        .from("t_packaging_transactions")
+        .insert([data])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["packaging-balances"] });
+      queryClient.invalidateQueries({ queryKey: ["packaging-transactions"] });
+      toast.success("Transakcja opakowań zapisana");
+    },
+    onError: (error: Error) => {
+      toast.error(`Błąd: ${error.message}`);
+    },
   });
 }

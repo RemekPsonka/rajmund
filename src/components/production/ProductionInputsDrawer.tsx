@@ -252,23 +252,36 @@ export const ProductionInputsDrawer = React.forwardRef<HTMLDivElement, Productio
                       <TableRow>
                         <TableHead>Nr partii</TableHead>
                         <TableHead>Produkt</TableHead>
+                        <TableHead>Kierunek</TableHead>
                         <TableHead className="text-right">Waga</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {inputs?.map((input) => (
-                        <TableRow key={input.id}>
-                          <TableCell>
-                            <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-                              {input.batch?.internal_batch_number}
-                            </code>
-                          </TableCell>
-                          <TableCell>{input.product?.name}</TableCell>
-                          <TableCell className="text-right font-mono">
-                            {input.weight.toFixed(2)} {input.product?.unit}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {inputs?.map((input) => {
+                        const directionLabel = PROCESSING_DIRECTIONS.find(
+                          (d) => d.value === input.direction
+                        )?.label;
+                        return (
+                          <TableRow key={input.id}>
+                            <TableCell>
+                              <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                                {input.batch?.internal_batch_number}
+                              </code>
+                            </TableCell>
+                            <TableCell>{input.product?.name}</TableCell>
+                            <TableCell>
+                              {directionLabel ? (
+                                <span className="text-sm">{directionLabel}</span>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
+                              {input.weight.toFixed(2)} {input.product?.unit}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </Card>

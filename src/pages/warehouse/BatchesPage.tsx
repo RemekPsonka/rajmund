@@ -1,7 +1,8 @@
 import { useState, useRef } from "react";
-import { Search, Layers, AlertCircle, CheckCircle, Clock, MoreHorizontal, Printer } from "lucide-react";
+import { Search, Layers, AlertCircle, CheckCircle, Clock, MoreHorizontal, Printer, MapPin, Filter } from "lucide-react";
 import { useBatches, useUpdateBatchStatus, type BatchStatus, type Batch } from "@/hooks/useBatches";
 import { useCompanies } from "@/hooks/useCompanies";
+import { useStorageLocations, getLocationTypeLabel, LocationType } from "@/hooks/useStorageLocations";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +28,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
@@ -38,21 +46,38 @@ const statusConfig: Record<BatchStatus, { label: string; variant: "default" | "d
   Quarantine: { label: "Kwarantanna", variant: "secondary", icon: Clock },
 };
 
+const LOCATION_TYPE_COLORS: Record<string, string> = {
+  chiller: "bg-blue-500",
+  freezer: "bg-purple-500",
+  shock: "bg-red-500",
+  production: "bg-green-500",
+  storage: "bg-gray-500",
+};
+
 export default function BatchesPage() {
   const { data: batches, isLoading } = useBatches();
   const { data: companies } = useCompanies();
+  const { data: locations } = useStorageLocations();
   const updateStatus = useUpdateBatchStatus();
   const [searchQuery, setSearchQuery] = useState("");
+  const [locationFilter, setLocationFilter] = useState<string>("all");
   const [selectedBatch, setSelectedBatch] = useState<Batch | null>(null);
   const [labelDialogOpen, setLabelDialogOpen] = useState(false);
   const labelRef = useRef<HTMLDivElement>(null);
 
-  const filteredBatches = batches?.filter(
-    (batch) =>
+  const filteredBatches = batches?.filter((batch) => {
+    const matchesSearch =
       batch.internal_batch_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
       batch.supplier_batch_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      batch.product?.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      batch.product?.name.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesLocation = 
+      locationFilter === "all" ||
+      (locationFilter === "none" && !batch.location_id) ||
+      batch.location_id === locationFilter;
+
+    return matchesSearch && matchesLocation;
+  });
 
   const handleStatusChange = (batchId: string, newStatus: BatchStatus) => {
     updateStatus.mutate({ id: batchId, status: newStatus });
@@ -100,15 +125,35 @@ export default function BatchesPage() {
         </p>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Szukaj po numerze partii lub produkcie..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10"
-        />
+      {/* Search and Filters */}
+      <div className="flex flex-wrap gap-4">
+        <div className="relative flex-1 min-w-[200px] max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Szukaj po numerze partii lub produkcie..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Select value={locationFilter} onValueChange={setLocationFilter}>
+          <SelectTrigger className="w-[200px]">
+            <Filter className="h-4 w-4 mr-2" />
+            <SelectValue placeholder="Filtruj lokalizację" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Wszystkie lokalizacje</SelectItem>
+            <SelectItem value="none">Bez lokalizacji</SelectItem>
+            {locations?.map((loc) => (
+              <SelectItem key={loc.id} value={loc.id}>
+                <div className="flex items-center gap-2">
+                  <div className={`h-2 w-2 rounded-full ${LOCATION_TYPE_COLORS[loc.location_type] || "bg-gray-500"}`} />
+                  {loc.name}
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Batches Table */}
@@ -142,6 +187,7 @@ export default function BatchesPage() {
                 <TableRow>
                   <TableHead>Nr partii wewnętrzny</TableHead>
                   <TableHead>Produkt</TableHead>
+                  <TableHead>Lokalizacja</TableHead>
                   <TableHead>Nr partii dostawcy</TableHead>
                   <TableHead>Data uboju</TableHead>
                   <TableHead>Data ważności</TableHead>
@@ -164,17 +210,27 @@ export default function BatchesPage() {
                           {batch.internal_batch_number}
                         </code>
                       </TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{batch.product?.name}</p>
-                          {batch.product?.sku && (
-                            <p className="text-xs text-muted-foreground">{batch.product.sku}</p>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{batch.product?.name}</p>
+                            {batch.product?.sku && (
+                              <p className="text-xs text-muted-foreground">{batch.product.sku}</p>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {batch.location ? (
+                            <Badge variant="outline" className="gap-1">
+                              <div className={`h-2 w-2 rounded-full ${LOCATION_TYPE_COLORS[batch.location.location_type] || "bg-gray-500"}`} />
+                              {batch.location.name}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">—</span>
                           )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {batch.supplier_batch_number || "—"}
-                      </TableCell>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {batch.supplier_batch_number || "—"}
+                        </TableCell>
                       <TableCell>{formatDate(batch.production_date)}</TableCell>
                       <TableCell>
                         <span className={expired ? "text-destructive font-medium" : expiringSoon ? "text-warning font-medium" : ""}>
