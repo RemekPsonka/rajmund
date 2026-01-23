@@ -332,6 +332,189 @@ export type Database = {
           },
         ]
       }
+      t_production_inputs: {
+        Row: {
+          batch_id: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          product_id: string
+          production_order_id: string
+          weight: number
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          product_id: string
+          production_order_id: string
+          weight: number
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          product_id?: string
+          production_order_id?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "t_production_inputs_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "t_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_production_inputs_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "t_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_production_inputs_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "t_production_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      t_production_logs: {
+        Row: {
+          created_at: string | null
+          employee_id: string | null
+          id: string
+          packaging_count: number | null
+          packaging_type: string | null
+          product_id: string
+          production_order_id: string
+          scale_device_id: string | null
+          source_batch_id: string | null
+          weight_gross: number
+          weight_net: number | null
+          weight_tare: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          employee_id?: string | null
+          id?: string
+          packaging_count?: number | null
+          packaging_type?: string | null
+          product_id: string
+          production_order_id: string
+          scale_device_id?: string | null
+          source_batch_id?: string | null
+          weight_gross: number
+          weight_net?: number | null
+          weight_tare?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          employee_id?: string | null
+          id?: string
+          packaging_count?: number | null
+          packaging_type?: string | null
+          product_id?: string
+          production_order_id?: string
+          scale_device_id?: string | null
+          source_batch_id?: string | null
+          weight_gross?: number
+          weight_net?: number | null
+          weight_tare?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "t_production_logs_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "t_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_production_logs_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "t_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_production_logs_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "t_production_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_production_logs_source_batch_id_fkey"
+            columns: ["source_batch_id"]
+            isOneToOne: false
+            referencedRelation: "t_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      t_production_orders: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          facility_id: string
+          id: string
+          notes: string | null
+          order_number: string
+          production_date: string | null
+          status: Database["public"]["Enums"]["production_order_status"] | null
+          supervisor_id: string | null
+          type: Database["public"]["Enums"]["production_order_type"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          facility_id: string
+          id?: string
+          notes?: string | null
+          order_number: string
+          production_date?: string | null
+          status?: Database["public"]["Enums"]["production_order_status"] | null
+          supervisor_id?: string | null
+          type?: Database["public"]["Enums"]["production_order_type"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          facility_id?: string
+          id?: string
+          notes?: string | null
+          order_number?: string
+          production_date?: string | null
+          status?: Database["public"]["Enums"]["production_order_status"] | null
+          supervisor_id?: string | null
+          type?: Database["public"]["Enums"]["production_order_type"] | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "t_production_orders_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "t_companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_production_orders_facility_id_fkey"
+            columns: ["facility_id"]
+            isOneToOne: false
+            referencedRelation: "t_facilities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       t_products: {
         Row: {
           company_id: string
@@ -569,11 +752,27 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_production_yield: {
+        Args: { p_order_id: string }
+        Returns: {
+          total_input_weight: number
+          total_output_weight: number
+          waste_percentage: number
+          yield_percentage: number
+        }[]
+      }
       generate_batch_number: { Args: { p_product_id: string }; Returns: string }
       generate_document_number: {
         Args: {
           p_company_id: string
           p_type: Database["public"]["Enums"]["warehouse_doc_type"]
+        }
+        Returns: string
+      }
+      generate_production_order_number: {
+        Args: {
+          p_company_id: string
+          p_type: Database["public"]["Enums"]["production_order_type"]
         }
         Returns: string
       }
@@ -600,6 +799,8 @@ export type Database = {
       contract_type: "B2B" | "UoP" | "Mandate" | "Other"
       document_status: "Draft" | "Approved" | "Cancelled"
       facility_type: "Plant" | "Warehouse" | "Office" | "Store"
+      production_order_status: "Open" | "Closed" | "Cancelled"
+      production_order_type: "Decomposition" | "Processing" | "Packing"
       warehouse_doc_type: "PZ" | "WZ" | "MM" | "RW" | "PW"
     }
     CompositeTypes: {
@@ -733,6 +934,8 @@ export const Constants = {
       contract_type: ["B2B", "UoP", "Mandate", "Other"],
       document_status: ["Draft", "Approved", "Cancelled"],
       facility_type: ["Plant", "Warehouse", "Office", "Store"],
+      production_order_status: ["Open", "Closed", "Cancelled"],
+      production_order_type: ["Decomposition", "Processing", "Packing"],
       warehouse_doc_type: ["PZ", "WZ", "MM", "RW", "PW"],
     },
   },
