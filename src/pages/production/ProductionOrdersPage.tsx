@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Plus,
   Search,
@@ -10,13 +10,14 @@ import {
   Scale,
   MoreHorizontal,
   Package,
+  Eye,
 } from "lucide-react";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -36,7 +37,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Tabs,
-  TabsContent,
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
@@ -48,7 +48,7 @@ import {
   type ProductionOrderStatus,
   type ProductionOrderType,
 } from "@/hooks/useProductionOrders";
-import { ProductionOrderDrawer } from "@/components/production/ProductionOrderDrawer";
+import { ProductionOrderDialog } from "@/components/production/ProductionOrderDialog";
 import { ProductionInputsDrawer } from "@/components/production/ProductionInputsDrawer";
 
 const statusConfig: Record<ProductionOrderStatus, { label: string; variant: "default" | "secondary" | "destructive"; icon: typeof Play }> = {
@@ -64,9 +64,10 @@ const typeLabels: Record<ProductionOrderType, string> = {
 };
 
 export default function ProductionOrdersPage() {
+  const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState<"all" | ProductionOrderStatus>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [inputsDrawerOpen, setInputsDrawerOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
@@ -82,9 +83,14 @@ export default function ProductionOrdersPage() {
       order.facility?.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleOpenInputs = (orderId: string) => {
+  const handleOpenInputs = (orderId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     setSelectedOrderId(orderId);
     setInputsDrawerOpen(true);
+  };
+
+  const handleRowClick = (orderId: string) => {
+    navigate(`/production/orders/${orderId}`);
   };
 
   const formatDate = (dateStr: string) => {
@@ -106,7 +112,7 @@ export default function ProductionOrdersPage() {
               Terminal Wagowy
             </Link>
           </Button>
-          <Button onClick={() => setDrawerOpen(true)} className="gap-2">
+          <Button onClick={() => setDialogOpen(true)} className="gap-2">
             <Plus className="h-4 w-4" />
             Nowe zlecenie
           </Button>
@@ -153,7 +159,7 @@ export default function ProductionOrdersPage() {
               {searchQuery ? "Nie znaleziono pasujących zleceń" : "Utwórz pierwsze zlecenie produkcyjne"}
             </p>
             {!searchQuery && (
-              <Button onClick={() => setDrawerOpen(true)} className="mt-4 gap-2">
+              <Button onClick={() => setDialogOpen(true)} className="mt-4 gap-2">
                 <Plus className="h-4 w-4" />
                 Nowe zlecenie
               </Button>
@@ -180,7 +186,11 @@ export default function ProductionOrdersPage() {
                   const StatusIcon = status.icon;
 
                   return (
-                    <TableRow key={order.id}>
+                    <TableRow 
+                      key={order.id} 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleRowClick(order.id)}
+                    >
                       <TableCell>
                         <code className="bg-muted px-2 py-1 rounded font-medium">
                           {order.order_number}
@@ -201,17 +211,24 @@ export default function ProductionOrdersPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
+                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                             <Button variant="ghost" size="icon" className="h-8 w-8">
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleOpenInputs(order.id)}>
+                            <DropdownMenuItem onClick={(e) => {
+                              e.stopPropagation();
+                              handleRowClick(order.id);
+                            }}>
+                              <Eye className="mr-2 h-4 w-4" />
+                              Zobacz szczegóły
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={(e) => handleOpenInputs(order.id, e)}>
                               <Package className="mr-2 h-4 w-4" />
                               Zarządzaj wsadem (RW)
                             </DropdownMenuItem>
-                            <DropdownMenuItem asChild>
+                            <DropdownMenuItem asChild onClick={(e) => e.stopPropagation()}>
                               <Link to={`/production/terminal?order=${order.id}`}>
                                 <Scale className="mr-2 h-4 w-4" />
                                 Otwórz terminal
@@ -220,16 +237,22 @@ export default function ProductionOrdersPage() {
                             <DropdownMenuSeparator />
                             {order.status === "Open" && (
                               <DropdownMenuItem
-                                onClick={() => closeOrder.mutate(order.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  closeOrder.mutate(order.id);
+                                }}
                                 disabled={closeOrder.isPending}
                               >
-                                <CheckCircle className="mr-2 h-4 w-4 text-success" />
+                                <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
                                 {closeOrder.isPending ? "Zamykanie..." : "Zamknij zlecenie (+ partie)"}
                               </DropdownMenuItem>
                             )}
                             {order.status === "Closed" && (
                               <DropdownMenuItem
-                                onClick={() => updateStatus.mutate({ id: order.id, status: "Open" })}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  updateStatus.mutate({ id: order.id, status: "Open" });
+                                }}
                               >
                                 <Play className="mr-2 h-4 w-4" />
                                 Otwórz ponownie
@@ -247,8 +270,8 @@ export default function ProductionOrdersPage() {
         </Card>
       )}
 
-      {/* Drawers */}
-      <ProductionOrderDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      {/* Dialogs */}
+      <ProductionOrderDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
       <ProductionInputsDrawer
         open={inputsDrawerOpen}
         onClose={() => {

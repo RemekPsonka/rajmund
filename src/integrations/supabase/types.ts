@@ -681,6 +681,57 @@ export type Database = {
           },
         ]
       }
+      t_production_tasks: {
+        Row: {
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string | null
+          id: string
+          is_completed: boolean | null
+          name: string
+          notes: string | null
+          production_order_id: string
+          sequence_number: number | null
+        }
+        Insert: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string | null
+          id?: string
+          is_completed?: boolean | null
+          name: string
+          notes?: string | null
+          production_order_id: string
+          sequence_number?: number | null
+        }
+        Update: {
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string | null
+          id?: string
+          is_completed?: boolean | null
+          name?: string
+          notes?: string | null
+          production_order_id?: string
+          sequence_number?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "t_production_tasks_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "t_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_production_tasks_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "t_production_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       t_products: {
         Row: {
           company_id: string
