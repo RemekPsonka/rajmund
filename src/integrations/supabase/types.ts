@@ -1196,6 +1196,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_authenticated: { Args: never; Returns: boolean }
       is_global_admin: { Args: { _user_id: string }; Returns: boolean }
       simulate_full_production_day: { Args: never; Returns: Json }
     }
