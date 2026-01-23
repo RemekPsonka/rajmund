@@ -10,6 +10,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Form,
@@ -572,21 +573,25 @@ export function ProductionOrderDialog({ open, onClose }: ProductionOrderDialogPr
                 />
               </div>
 
-              {/* Actions */}
-              <div className="flex justify-end gap-3 pt-4">
-                <Button type="button" variant="outline" onClick={handleClose}>
-                  Anuluj
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={createOrder.isPending || createTasks.isPending}
-                >
-                  Utwórz zlecenie
-                </Button>
-              </div>
             </form>
           </Form>
         </ScrollArea>
+
+        {/* Footer - zawsze widoczny */}
+        <DialogFooter className="border-t pt-4">
+          <Button type="button" variant="outline" onClick={handleClose}>
+            Anuluj
+          </Button>
+          <Button
+            onClick={form.handleSubmit(onSubmit)}
+            disabled={createOrder.isPending || createTasks.isPending}
+          >
+            {(createOrder.isPending || createTasks.isPending) && (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            )}
+            Utwórz zlecenie
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
