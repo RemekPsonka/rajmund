@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { Search, Layers, AlertCircle, CheckCircle, Clock, MoreHorizontal } from "lucide-react";
-import { useBatches, useUpdateBatchStatus, type BatchStatus } from "@/hooks/useBatches";
+import { useState, useRef } from "react";
+import { Search, Layers, AlertCircle, CheckCircle, Clock, MoreHorizontal, Printer } from "lucide-react";
+import { useBatches, useUpdateBatchStatus, type BatchStatus, type Batch } from "@/hooks/useBatches";
+import { useCompanies } from "@/hooks/useCompanies";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,11 +18,19 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
+import { BatchLabel } from "@/components/warehouse/BatchLabel";
 
 const statusConfig: Record<BatchStatus, { label: string; variant: "default" | "destructive" | "secondary"; icon: typeof CheckCircle }> = {
   Released: { label: "Zwolniona", variant: "default", icon: CheckCircle },
@@ -31,8 +40,12 @@ const statusConfig: Record<BatchStatus, { label: string; variant: "default" | "d
 
 export default function BatchesPage() {
   const { data: batches, isLoading } = useBatches();
+  const { data: companies } = useCompanies();
   const updateStatus = useUpdateBatchStatus();
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedBatch, setSelectedBatch] = useState<Batch | null>(null);
+  const [labelDialogOpen, setLabelDialogOpen] = useState(false);
+  const labelRef = useRef<HTMLDivElement>(null);
 
   const filteredBatches = batches?.filter(
     (batch) =>
@@ -43,6 +56,15 @@ export default function BatchesPage() {
 
   const handleStatusChange = (batchId: string, newStatus: BatchStatus) => {
     updateStatus.mutate({ id: batchId, status: newStatus });
+  };
+
+  const handlePrintLabel = (batch: Batch) => {
+    setSelectedBatch(batch);
+    setLabelDialogOpen(true);
+  };
+
+  const handlePrint = () => {
+    window.print();
   };
 
   const formatDate = (dateStr: string | null) => {
@@ -61,6 +83,11 @@ export default function BatchesPage() {
   const isExpired = (expirationDate: string | null) => {
     if (!expirationDate) return false;
     return new Date(expirationDate) < new Date();
+  };
+
+  // Get company name for label
+  const getCompanyName = () => {
+    return companies?.[0]?.name || "NARROW Sp. z o.o.";
   };
 
   return (
@@ -165,47 +192,82 @@ export default function BatchesPage() {
                           {status.label}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => handleStatusChange(batch.id, "Released")}
-                              disabled={batch.status === "Released"}
-                            >
-                              <CheckCircle className="mr-2 h-4 w-4 text-success" />
-                              Zwolnij
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleStatusChange(batch.id, "Quarantine")}
-                              disabled={batch.status === "Quarantine"}
-                            >
-                              <Clock className="mr-2 h-4 w-4 text-warning" />
-                              Kwarantanna
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleStatusChange(batch.id, "Blocked")}
-                              disabled={batch.status === "Blocked"}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              <AlertCircle className="mr-2 h-4 w-4" />
-                              Zablokuj
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  );
-}
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handlePrintLabel(batch)}>
+                                <Printer className="mr-2 h-4 w-4" />
+                                Drukuj etykietę QR
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => handleStatusChange(batch.id, "Released")}
+                                disabled={batch.status === "Released"}
+                              >
+                                <CheckCircle className="mr-2 h-4 w-4 text-success" />
+                                Zwolnij
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleStatusChange(batch.id, "Quarantine")}
+                                disabled={batch.status === "Quarantine"}
+                              >
+                                <Clock className="mr-2 h-4 w-4 text-warning" />
+                                Kwarantanna
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleStatusChange(batch.id, "Blocked")}
+                                disabled={batch.status === "Blocked"}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <AlertCircle className="mr-2 h-4 w-4" />
+                                Zablokuj
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Label Print Dialog */}
+        <Dialog open={labelDialogOpen} onOpenChange={setLabelDialogOpen}>
+          <DialogContent className="max-w-fit">
+            <DialogHeader>
+              <DialogTitle>Podgląd etykiety partii</DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col items-center gap-4">
+              {selectedBatch && (
+                <BatchLabel
+                  ref={labelRef}
+                  companyName={getCompanyName()}
+                  internalBatchNumber={selectedBatch.internal_batch_number}
+                  productName={selectedBatch.product?.name || "Nieznany produkt"}
+                  productSku={selectedBatch.product?.sku}
+                  quantity={selectedBatch.current_quantity}
+                  unit={selectedBatch.product?.unit || "kg"}
+                  productionDate={selectedBatch.production_date}
+                  expirationDate={selectedBatch.expiration_date}
+                  supplierBatchNumber={selectedBatch.supplier_batch_number}
+                  supplierName={selectedBatch.supplier?.name}
+                />
+              )}
+              <Button onClick={handlePrint} className="w-full">
+                <Printer className="mr-2 h-4 w-4" />
+                Drukuj
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
