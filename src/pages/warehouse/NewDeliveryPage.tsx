@@ -51,7 +51,10 @@ const step1Schema = z.object({
   external_doc_number: z.string().optional(),
   driver_name: z.string().optional(),
   car_plates: z.string().optional(),
-  reception_temp: z.coerce.number().optional(),
+  reception_temp: z.preprocess(
+    (val) => (val === "" || val === undefined ? undefined : Number(val)),
+    z.number().optional()
+  ),
   notes: z.string().optional(),
 });
 
@@ -60,7 +63,10 @@ type Step1FormValues = z.infer<typeof step1Schema>;
 // Step 2: Item form
 const itemSchema = z.object({
   product_id: z.string().min(1, "Wybierz produkt"),
-  quantity: z.coerce.number().min(0.01, "Podaj ilość"),
+  quantity: z.preprocess(
+    (val) => (val === "" || val === undefined ? undefined : Number(val)),
+    z.number().min(0.01, "Podaj ilość")
+  ),
   supplier_batch_number: z.string().optional(),
   production_date: z.string().optional(),
   expiration_date: z.string().optional(),
@@ -423,7 +429,7 @@ export default function NewDeliveryPage() {
                       <FormItem>
                         <FormLabel>Temperatura przyjęcia (°C)</FormLabel>
                         <FormControl>
-                          <Input className="h-12 text-base" type="number" step="0.1" placeholder="Np. 2.5" {...field} />
+                          <Input className="h-12 text-base" type="number" step="0.1" placeholder="Np. 2.5" {...field} value={field.value ?? ""} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -536,7 +542,7 @@ export default function NewDeliveryPage() {
                         <FormItem>
                           <FormLabel>Ilość (kg)*</FormLabel>
                           <FormControl>
-                            <Input className="h-12 text-lg font-medium" type="number" step="0.01" placeholder="0.00" {...field} />
+                            <Input className="h-12 text-lg font-medium" type="number" step="0.01" placeholder="0.00" {...field} value={field.value ?? ""} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
