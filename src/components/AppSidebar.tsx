@@ -1,6 +1,5 @@
 import {
   Building2,
-  Users,
   Settings,
   LayoutDashboard,
   Factory,
@@ -23,6 +22,8 @@ import {
   Ruler,
   ListChecks,
   Box,
+  Users,
+  UserCog,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -83,6 +84,7 @@ const devItems = [
 ];
 
 const settingsItems = [
+  { title: "Użytkownicy", url: "/settings/users", icon: UserCog },
   { title: "Lokalizacje", url: "/settings/locations", icon: MapPin },
   { title: "Urządzenia", url: "/settings/devices", icon: Scale },
   { title: "Opakowania", url: "/settings/packaging-types", icon: Box },
