@@ -298,11 +298,20 @@ export default function TumblerTerminalPage() {
                 <SelectValue placeholder="Wybierz zlecenie przetwórstwa" />
               </SelectTrigger>
               <SelectContent>
-                {processingOrders.map((order) => (
-                  <SelectItem key={order.id} value={order.id}>
-                    {order.order_number} • {order.facility?.name}
-                  </SelectItem>
-                ))}
+                {processingOrders.length === 0 ? (
+                  <div className="p-4 text-center text-muted-foreground text-sm">
+                    <AlertCircle className="h-5 w-5 mx-auto mb-2 opacity-50" />
+                    Brak otwartych zleceń przetwórstwa.
+                    <br />
+                    Utwórz zlecenie typu "Przetwórstwo" w module Zlecenia.
+                  </div>
+                ) : (
+                  processingOrders.map((order) => (
+                    <SelectItem key={order.id} value={order.id}>
+                      {order.order_number} • {order.facility?.name}
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
           </div>
