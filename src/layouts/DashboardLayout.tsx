@@ -17,6 +17,11 @@ const routeNames: Record<string, string> = {
   "/companies": "Spółki",
   "/facilities": "Zakłady",
   "/employees": "Pracownicy",
+  "/products": "Produkty",
+  "/warehouse": "Magazyn",
+  "/warehouse/deliveries": "Przyjęcia (PZ)",
+  "/warehouse/deliveries/new": "Nowa dostawa",
+  "/warehouse/batches": "Ewidencja Partii",
   "/settings": "Ustawienia",
 };
 
