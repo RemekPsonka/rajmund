@@ -1,8 +1,8 @@
 import { useState, useRef } from "react";
-import { Search, Layers, AlertCircle, CheckCircle, Clock, MoreHorizontal, Printer, MapPin, Filter } from "lucide-react";
+import { Search, Layers, AlertCircle, CheckCircle, Clock, MoreHorizontal, Printer, Filter } from "lucide-react";
 import { useBatches, useUpdateBatchStatus, type BatchStatus, type Batch } from "@/hooks/useBatches";
 import { useCompanies } from "@/hooks/useCompanies";
-import { useStorageLocations, getLocationTypeLabel, LocationType } from "@/hooks/useStorageLocations";
+import { useStorageLocations } from "@/hooks/useStorageLocations";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +39,7 @@ import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 import { BatchLabel } from "@/components/warehouse/BatchLabel";
+import { ExportButton } from "@/components/ExportButton";
 
 const statusConfig: Record<BatchStatus, { label: string; variant: "default" | "destructive" | "secondary"; icon: typeof CheckCircle }> = {
   Released: { label: "Zwolniona", variant: "default", icon: CheckCircle },
@@ -115,14 +116,49 @@ export default function BatchesPage() {
     return companies?.[0]?.name || "NARROW Sp. z o.o.";
   };
 
+  // Prepare export data
+  const exportData = filteredBatches?.map((batch) => ({
+    internal_batch_number: batch.internal_batch_number,
+    product_name: batch.product?.name || "",
+    product_sku: batch.product?.sku || "",
+    location_name: batch.location?.name || "",
+    supplier_batch_number: batch.supplier_batch_number || "",
+    production_date: batch.production_date ? formatDate(batch.production_date) : "",
+    expiration_date: batch.expiration_date ? formatDate(batch.expiration_date) : "",
+    current_quantity: `${batch.current_quantity.toFixed(2)} ${batch.product?.unit || "kg"}`,
+    status: statusConfig[batch.status]?.label || batch.status,
+    supplier_name: batch.supplier?.name || "",
+  })) || [];
+
+  const exportColumns: { key: keyof typeof exportData[0]; header: string }[] = [
+    { key: "internal_batch_number", header: "Nr partii wewn." },
+    { key: "product_name", header: "Produkt" },
+    { key: "product_sku", header: "SKU" },
+    { key: "location_name", header: "Lokalizacja" },
+    { key: "supplier_batch_number", header: "Nr partii dostawcy" },
+    { key: "supplier_name", header: "Dostawca" },
+    { key: "production_date", header: "Data uboju" },
+    { key: "expiration_date", header: "Data ważności" },
+    { key: "current_quantity", header: "Ilość" },
+    { key: "status", header: "Status" },
+  ];
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">Ewidencja Partii</h1>
-        <p className="text-muted-foreground">
-          Traceability - śledzenie partii towaru na magazynie
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">Ewidencja Partii</h1>
+          <p className="text-muted-foreground">
+            Traceability - śledzenie partii towaru na magazynie
+          </p>
+        </div>
+        <ExportButton
+          data={exportData}
+          columns={exportColumns}
+          filename={`partie-${format(new Date(), "yyyy-MM-dd")}`}
+          disabled={isLoading}
+        />
       </div>
 
       {/* Search and Filters */}

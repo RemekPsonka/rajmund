@@ -50,6 +50,7 @@ import {
 } from "@/hooks/useProductionOrders";
 import { ProductionOrderDialog } from "@/components/production/ProductionOrderDialog";
 import { ProductionInputsDrawer } from "@/components/production/ProductionInputsDrawer";
+import { ExportButton } from "@/components/ExportButton";
 
 const statusConfig: Record<ProductionOrderStatus, { label: string; variant: "default" | "secondary" | "destructive"; icon: typeof Play }> = {
   Open: { label: "Otwarte", variant: "default", icon: Play },
@@ -97,6 +98,25 @@ export default function ProductionOrdersPage() {
     return format(new Date(dateStr), "dd.MM.yyyy", { locale: pl });
   };
 
+  // Export data preparation
+  const exportData = filteredOrders?.map((order) => ({
+    order_number: order.order_number,
+    type: typeLabels[order.type],
+    facility_name: order.facility?.name || "",
+    production_date: formatDate(order.production_date),
+    status: statusConfig[order.status]?.label || order.status,
+    notes: order.notes || "",
+  })) || [];
+
+  const exportColumns: { key: keyof typeof exportData[0]; header: string }[] = [
+    { key: "order_number", header: "Nr zlecenia" },
+    { key: "type", header: "Typ" },
+    { key: "facility_name", header: "Zakład" },
+    { key: "production_date", header: "Data produkcji" },
+    { key: "status", header: "Status" },
+    { key: "notes", header: "Notatki" },
+  ];
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -106,6 +126,12 @@ export default function ProductionOrdersPage() {
           <p className="text-muted-foreground">Zarządzanie zleceniami rozbioru i przetwórstwa</p>
         </div>
         <div className="flex gap-2">
+          <ExportButton
+            data={exportData}
+            columns={exportColumns}
+            filename={`zlecenia-${format(new Date(), "yyyy-MM-dd")}`}
+            disabled={isLoading}
+          />
           <Button variant="outline" asChild className="gap-2">
             <Link to="/production/terminal">
               <Scale className="h-4 w-4" />
