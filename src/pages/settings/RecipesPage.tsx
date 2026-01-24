@@ -17,9 +17,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Eye, FlaskConical } from "lucide-react";
+import { Plus, Pencil, Trash2, FlaskConical } from "lucide-react";
 import { useCompanies } from "@/hooks/useCompanies";
 import { useProducts } from "@/hooks/useProducts";
 import {
@@ -27,6 +37,7 @@ import {
   useRecipe,
   useRecipeIngredients,
   useSaveRecipeWithIngredients,
+  useDeleteRecipe,
 } from "@/hooks/useRecipes";
 import { RecipeFormDialog } from "@/components/recipes/RecipeFormDialog";
 import { RecipeDetailSheet } from "@/components/recipes/RecipeDetailSheet";
@@ -37,6 +48,8 @@ export default function RecipesPage() {
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [recipeToDelete, setRecipeToDelete] = useState<{ id: string; name: string } | null>(null);
 
   const { data: companies, isLoading: loadingCompanies } = useCompanies();
   const { data: recipes, isLoading: loadingRecipes } = useRecipes(
@@ -49,6 +62,7 @@ export default function RecipesPage() {
   );
 
   const saveRecipe = useSaveRecipeWithIngredients();
+  const deleteRecipe = useDeleteRecipe();
 
   const companyProducts =
     products?.filter((p) => p.company_id === selectedCompanyId) || [];
@@ -64,10 +78,29 @@ export default function RecipesPage() {
     setDetailSheetOpen(true);
   };
 
-  const handleOpenEdit = () => {
+  const handleOpenEdit = (recipeId?: string) => {
+    if (recipeId) {
+      setSelectedRecipeId(recipeId);
+    }
     setEditMode(true);
     setDetailSheetOpen(false);
     setFormDialogOpen(true);
+  };
+
+  const handleDeleteClick = (recipe: { id: string; name: string }) => {
+    setRecipeToDelete(recipe);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (recipeToDelete) {
+      deleteRecipe.mutate(recipeToDelete.id, {
+        onSuccess: () => {
+          setDeleteDialogOpen(false);
+          setRecipeToDelete(null);
+        },
+      });
+    }
   };
 
   const handleFormSubmit = async (
@@ -181,13 +214,25 @@ export default function RecipesPage() {
                         : "—"}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleOpenDetail(recipe.id)}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenEdit(recipe.id)}
+                          title="Edytuj"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteClick({ id: recipe.id, name: recipe.name })}
+                          title="Usuń"
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -216,8 +261,30 @@ export default function RecipesPage() {
         recipe={selectedRecipe || null}
         ingredients={ingredients || []}
         products={companyProducts}
-        onEdit={handleOpenEdit}
+        onEdit={() => handleOpenEdit()}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Usunąć recepturę?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Czy na pewno chcesz usunąć recepturę <strong>{recipeToDelete?.name}</strong>?
+              Ta operacja jest nieodwracalna.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Anuluj</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Usuń
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
