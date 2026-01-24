@@ -229,17 +229,15 @@ export default function Dashboard() {
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis 
                     dataKey="date" 
-                    tickFormatter={(value) => format(new Date(value), "EEE", { locale: pl })}
                     className="text-xs"
                   />
                   <YAxis className="text-xs" />
                   <Tooltip 
-                    labelFormatter={(value) => format(new Date(value), "d MMM", { locale: pl })}
                     formatter={(value: number) => [`${value.toLocaleString("pl-PL")} kg`, "Produkcja"]}
                   />
                   <Line 
                     type="monotone" 
-                    dataKey="total_kg" 
+                    dataKey="kg" 
                     stroke="hsl(var(--primary))" 
                     strokeWidth={2}
                     dot={{ fill: "hsl(var(--primary))" }}
