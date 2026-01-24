@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
+import { z } from "zod";
+import { toast } from "sonner";
 import {
   Users,
   Plus,
@@ -153,12 +155,33 @@ export default function UsersPage() {
     });
   };
 
+  const inviteSchema = z.object({
+    email: z.string()
+      .trim()
+      .min(1, { message: "Email jest wymagany" })
+      .email({ message: "Nieprawidłowy format adresu email" })
+      .max(255, { message: "Email zbyt długi" }),
+    fullName: z.string()
+      .trim()
+      .min(2, { message: "Imię i nazwisko wymagane (min. 2 znaki)" })
+      .max(100, { message: "Imię i nazwisko zbyt długie" }),
+  });
+
   const handleInviteUser = () => {
-    if (!inviteEmail || !inviteFullName) return;
+    const validation = inviteSchema.safeParse({
+      email: inviteEmail,
+      fullName: inviteFullName,
+    });
+
+    if (!validation.success) {
+      toast.error(validation.error.errors[0].message);
+      return;
+    }
+
     inviteUser.mutate(
       {
-        email: inviteEmail,
-        fullName: inviteFullName,
+        email: validation.data.email,
+        fullName: validation.data.fullName,
         role: inviteRole as any,
         companyId: inviteCompany || undefined,
       },
