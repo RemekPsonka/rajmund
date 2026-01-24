@@ -78,7 +78,11 @@ export function RecipeFormDialog({
   const [newIngredientAmount, setNewIngredientAmount] = useState("");
 
   // Filter products by category
-  const rawMeatProducts = products.filter(p => p.industry_category === 'RawMeat');
+  // Surowce bazowe = produkty z rozbioru (SemiFinished) lub surowe mięso (RawMeat)
+  const baseProducts = products.filter(p => 
+    p.industry_category === 'SemiFinished' || 
+    p.industry_category === 'RawMeat'
+  );
   const finishedProducts = products.filter(p => p.industry_category === 'FinishedGood' || !p.is_raw_material);
   const ingredientProducts = products.filter(p => 
     p.industry_category === 'Spice' || 
@@ -227,17 +231,20 @@ export function RecipeFormDialog({
 
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label>Surowiec bazowy (mięso)</Label>
+                <Label>Surowiec bazowy (półprodukt z rozbioru)</Label>
                 <Select value={baseProductId} onValueChange={setBaseProductId}>
                   <SelectTrigger>
                     <SelectValue placeholder="Wybierz surowiec" />
                   </SelectTrigger>
                   <SelectContent>
-                    {rawMeatProducts.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        🥩 {p.name}
-                      </SelectItem>
-                    ))}
+                    {baseProducts.map((p) => {
+                      const icon = p.industry_category === 'SemiFinished' ? '🔄' : '🥩';
+                      return (
+                        <SelectItem key={p.id} value={p.id}>
+                          {icon} {p.name}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>
