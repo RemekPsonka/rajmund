@@ -143,7 +143,7 @@ export function ProductDrawer({ open, onClose, product }: ProductDrawerProps) {
           </DrawerHeader>
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 px-4 max-h-[60vh] overflow-y-auto">
+            <form id="product-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 px-4 max-h-[60vh] overflow-y-auto">
               <FormField
                 control={form.control}
                 name="company_id"
@@ -312,17 +312,17 @@ export function ProductDrawer({ open, onClose, product }: ProductDrawerProps) {
                   )}
                 />
               </div>
-
-              <DrawerFooter className="px-0">
-                <Button type="submit" disabled={isPending}>
-                  {isPending ? "Zapisywanie..." : isEditing ? "Zapisz zmiany" : "Dodaj produkt"}
-                </Button>
-                <Button type="button" variant="outline" onClick={onClose}>
-                  Anuluj
-                </Button>
-              </DrawerFooter>
             </form>
           </Form>
+
+          <DrawerFooter>
+            <Button type="submit" form="product-form" disabled={isPending}>
+              {isPending ? "Zapisywanie..." : isEditing ? "Zapisz zmiany" : "Dodaj produkt"}
+            </Button>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Anuluj
+            </Button>
+          </DrawerFooter>
         </div>
       </DrawerContent>
     </Drawer>
