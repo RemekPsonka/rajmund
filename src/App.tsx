@@ -74,6 +74,7 @@ const App = () => (
               <Route path="/shipping" element={<ShipmentsPage />} />
               <Route path="/shipping/:id" element={<ShipmentDetailPage />} />
               <Route path="/dev-tools" element={<DevToolsPage />} />
+              <Route path="/dev/seed" element={<DevToolsPage />} />
               <Route path="/system-health" element={<SystemHealthPage />} />
               <Route path="/settings/locations" element={<StorageLocationsPage />} />
               <Route path="/settings/devices" element={<DevicesPage />} />

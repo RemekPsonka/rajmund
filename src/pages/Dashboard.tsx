@@ -1,386 +1,410 @@
-import {
-  Building2,
-  Factory,
-  Users,
-  TrendingUp,
-  AlertCircle,
-  Package,
-  Truck,
-  ClipboardList,
-  AlertTriangle,
-  Scale,
-} from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useCompanies } from "@/hooks/useCompanies";
-import { useFacilities } from "@/hooks/useFacilities";
-import { useEmployees } from "@/hooks/useEmployees";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  LineChart,
+  Line
+} from "recharts";
+import { 
+  Package, 
+  Factory, 
+  Truck, 
+  ClipboardList, 
+  AlertTriangle, 
+  ArrowRight, 
+  Warehouse,
+  TrendingUp,
+  Activity
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useDashboardKPIs } from "@/hooks/useDashboardKPIs";
 import { useAlerts } from "@/hooks/useAlerts";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
-import { useNavigate } from "react-router-dom";
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart";
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from "recharts";
+import { 
+  useStockTotals, 
+  useProductionTodayTotal, 
+  useTopProductsByStock, 
+  useRecentMovements 
+} from "@/hooks/useAnalyticsViews";
+import { format } from "date-fns";
+import { pl } from "date-fns/locale";
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { data: companies, isLoading: loadingCompanies } = useCompanies();
-  const { data: facilities, isLoading: loadingFacilities } = useFacilities();
-  const { data: employees, isLoading: loadingEmployees } = useEmployees();
-  const { data: kpis, isLoading: loadingKPIs } = useDashboardKPIs();
-  const { data: alertsData, isLoading: loadingAlerts } = useAlerts();
+  const { data: kpis, isLoading: kpisLoading } = useDashboardKPIs();
+  const { data: alerts } = useAlerts();
+  
+  // Dane z widoków analitycznych
+  const { data: stockTotals, isLoading: stockLoading } = useStockTotals();
+  const { data: productionToday, isLoading: productionLoading } = useProductionTodayTotal();
+  const { data: topProducts, isLoading: topProductsLoading } = useTopProductsByStock(5);
+  const { data: recentMovements, isLoading: movementsLoading } = useRecentMovements(5);
 
-  const activeCompanies = companies?.filter((c) => c.is_active).length || 0;
-  const activeEmployees = employees?.filter((e) => e.is_active).length || 0;
-  const plantFacilities = facilities?.filter((f) => f.type === "Plant").length || 0;
-
-  const stats = [
-    {
-      title: "Spółki",
-      value: loadingCompanies ? "..." : companies?.length || 0,
-      subtitle: `${activeCompanies} aktywnych`,
-      icon: Building2,
-      trend: "+2 w tym miesiącu",
-    },
-    {
-      title: "Zakłady",
-      value: loadingFacilities ? "..." : facilities?.length || 0,
-      subtitle: `${plantFacilities} zakładów produkcyjnych`,
-      icon: Factory,
-      trend: "Wszystkie aktywne",
-    },
-    {
-      title: "Pracownicy",
-      value: loadingEmployees ? "..." : employees?.length || 0,
-      subtitle: `${activeEmployees} aktywnych`,
-      icon: Users,
-      trend: "Na bieżąco",
-    },
-    {
-      title: "Wydajność",
-      value: "—",
-      subtitle: "Brak danych",
-      icon: TrendingUp,
-      trend: "Wymaga MES",
-    },
+  const quickActions = [
+    { label: "Nowe przyjęcie (PZ)", path: "/warehouse/deliveries/new", icon: Package },
+    { label: "Nowe zlecenie produkcyjne", path: "/production/orders", icon: Factory },
+    { label: "Terminal wagowy", path: "/production/terminal", icon: Activity },
+    { label: "Nowa wysyłka", path: "/shipping", icon: Truck },
   ];
 
-  const chartConfig = {
-    kg: {
-      label: "Produkcja (kg)",
-      color: "hsl(var(--primary))",
-    },
+  const getDocTypeBadgeVariant = (type: string) => {
+    switch (type) {
+      case "PZ": return "default";
+      case "WZ": return "secondary";
+      case "MM": return "outline";
+      case "RW": return "destructive";
+      case "PW": return "default";
+      default: return "outline";
+    }
+  };
+
+  const getStatusBadgeVariant = (status: string) => {
+    switch (status) {
+      case "Approved": return "default";
+      case "Draft": return "secondary";
+      case "Cancelled": return "destructive";
+      default: return "outline";
+    }
   };
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">Pulpit</h1>
-        <p className="text-muted-foreground">Przegląd systemu NARROW OPS</p>
+      {/* Nagłówek */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground">
+            Przegląd operacyjny systemu NARROW ERP
+          </p>
+        </div>
+        <Badge variant="outline" className="text-xs">
+          {format(new Date(), "EEEE, d MMMM yyyy", { locale: pl })}
+        </Badge>
       </div>
 
-      {/* Operational KPIs */}
+      {/* Główne KPI - 4 karty */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="shadow-industrial">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Produkcja dziś
-            </CardTitle>
-            <Scale className="h-4 w-4 text-primary" />
+        {/* Stan Magazynowy */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Stan Magazynowy</CardTitle>
+            <Warehouse className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {loadingKPIs ? (
-              <Skeleton className="h-8 w-20" />
+            {stockLoading ? (
+              <Skeleton className="h-8 w-24" />
             ) : (
               <>
                 <div className="text-2xl font-bold">
-                  {kpis?.dailyProductionKg.toLocaleString("pl-PL")} kg
+                  {stockTotals?.totalWeight.toLocaleString("pl-PL", { maximumFractionDigits: 0 })} kg
                 </div>
-                <p className="text-xs text-muted-foreground">Wyprodukowano dzisiaj</p>
+                <p className="text-xs text-muted-foreground">
+                  {stockTotals?.productsWithStock || 0} produktów • {stockTotals?.totalBatches || 0} partii
+                </p>
               </>
             )}
           </CardContent>
         </Card>
 
-        <Card
-          className="shadow-industrial cursor-pointer hover:border-primary/50 transition-colors"
-          onClick={() => navigate("/production/orders")}
-        >
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Otwarte zlecenia
-            </CardTitle>
-            <ClipboardList className="h-4 w-4 text-primary" />
+        {/* Produkcja Dzisiaj */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Produkcja Dzisiaj</CardTitle>
+            <Factory className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {loadingKPIs ? (
-              <Skeleton className="h-8 w-12" />
+            {productionLoading ? (
+              <Skeleton className="h-8 w-24" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold">
+                  {productionToday?.totalOutputKg.toLocaleString("pl-PL", { maximumFractionDigits: 0 })} kg
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {productionToday?.totalLogs || 0} operacji ważenia
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Otwarte Zlecenia */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Otwarte Zlecenia</CardTitle>
+            <ClipboardList className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {kpisLoading ? (
+              <Skeleton className="h-8 w-16" />
             ) : (
               <>
                 <div className="text-2xl font-bold">{kpis?.openOrdersCount || 0}</div>
-                <p className="text-xs text-muted-foreground">Zleceń do realizacji</p>
+                <p className="text-xs text-muted-foreground">
+                  zlecenia w trakcie realizacji
+                </p>
               </>
             )}
           </CardContent>
         </Card>
 
-        <Card
-          className="shadow-industrial cursor-pointer hover:border-primary/50 transition-colors"
-          onClick={() => navigate("/shipping")}
-        >
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Wysyłki dziś
-            </CardTitle>
-            <Truck className="h-4 w-4 text-primary" />
+        {/* Wysyłki Dzisiaj */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Wysyłki Dzisiaj</CardTitle>
+            <Truck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {loadingKPIs ? (
-              <Skeleton className="h-8 w-12" />
+            {kpisLoading ? (
+              <Skeleton className="h-8 w-16" />
             ) : (
               <>
                 <div className="text-2xl font-bold">{kpis?.todayShipmentsCount || 0}</div>
-                <p className="text-xs text-muted-foreground">Do wysyłki</p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card
-          className={`shadow-industrial cursor-pointer hover:border-primary/50 transition-colors ${
-            (kpis?.expiringBatchesCount || 0) > 0 ? "border-warning/50" : ""
-          }`}
-          onClick={() => navigate("/warehouse/batches")}
-        >
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Partie wygasające
-            </CardTitle>
-            <Package className="h-4 w-4 text-warning" />
-          </CardHeader>
-          <CardContent>
-            {loadingKPIs ? (
-              <Skeleton className="h-8 w-12" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold">
-                  {kpis?.expiringBatchesCount || 0}
-                  {(kpis?.blockedBatchesCount || 0) > 0 && (
-                    <Badge variant="destructive" className="ml-2 text-xs">
-                      +{kpis?.blockedBatchesCount} zablok.
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">W ciągu 7 dni</p>
+                <p className="text-xs text-muted-foreground">
+                  zaplanowanych na dziś
+                </p>
               </>
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Alerts Section */}
-      {!loadingAlerts && alertsData && alertsData.alerts.length > 0 && (
-        <Card className="border-warning/50 bg-warning/5 shadow-industrial">
-          <CardHeader className="pb-2">
+      {/* Alerty o partiach */}
+      {alerts && alerts.criticalCount > 0 && (
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-warning" />
-              <CardTitle className="text-base">
-                Alerty ({alertsData.totalCount})
-              </CardTitle>
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <CardTitle className="text-base">Wymagana uwaga</CardTitle>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
-              {alertsData.alerts.map((alert) => (
-                <div
-                  key={alert.id}
-                  className="flex items-center gap-3 rounded-md p-3 bg-background cursor-pointer hover:bg-accent transition-colors"
-                  onClick={() => alert.link && navigate(alert.link)}
-                >
-                  <Badge
-                    variant={
-                      alert.severity === "critical"
-                        ? "destructive"
-                        : alert.severity === "warning"
-                        ? "secondary"
-                        : "outline"
-                    }
-                  >
-                    {alert.count}
-                  </Badge>
-                  <div>
-                    <p className="font-medium text-sm">{alert.title}</p>
-                    <p className="text-xs text-muted-foreground">{alert.description}</p>
-                  </div>
-                </div>
-              ))}
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="text-sm">
+                  <span className="font-semibold text-destructive">{alerts.criticalCount}</span> partii wymaga pilnej uwagi
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {alerts.totalCount} partii z alertami
+                </p>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => navigate("/warehouse/batches")}
+              >
+                Zobacz partie
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Production Trend Chart */}
+      {/* Wykresy */}
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="shadow-industrial">
+        {/* Trend produkcji 7 dni */}
+        <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Produkcja - ostatnie 7 dni</CardTitle>
-            <CardDescription>Trend dzienny w kilogramach</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5" />
+              Produkcja - ostatnie 7 dni
+            </CardTitle>
+            <CardDescription>Dzienna wydajność produkcyjna (kg)</CardDescription>
           </CardHeader>
           <CardContent>
-            {loadingKPIs ? (
+            {kpisLoading ? (
               <Skeleton className="h-[200px] w-full" />
-            ) : kpis?.weeklyProductionTrend && kpis.weeklyProductionTrend.some((d) => d.kg > 0) ? (
-              <ChartContainer config={chartConfig} className="h-[200px] w-full">
-                <BarChart data={kpis.weeklyProductionTrend}>
-                  <XAxis
-                    dataKey="date"
-                    tickLine={false}
-                    axisLine={false}
-                    tickMargin={8}
+            ) : (
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={kpis?.weeklyProductionTrend || []}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis 
+                    dataKey="date" 
+                    tickFormatter={(value) => format(new Date(value), "EEE", { locale: pl })}
+                    className="text-xs"
                   />
-                  <YAxis tickLine={false} axisLine={false} tickMargin={8} width={60} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar
-                    dataKey="kg"
-                    fill="var(--color-kg)"
-                    radius={[4, 4, 0, 0]}
+                  <YAxis className="text-xs" />
+                  <Tooltip 
+                    labelFormatter={(value) => format(new Date(value), "d MMM", { locale: pl })}
+                    formatter={(value: number) => [`${value.toLocaleString("pl-PL")} kg`, "Produkcja"]}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="total_kg" 
+                    stroke="hsl(var(--primary))" 
+                    strokeWidth={2}
+                    dot={{ fill: "hsl(var(--primary))" }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Top 5 produktów */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Top 5 produktów na magazynie
+            </CardTitle>
+            <CardDescription>Produkty z największym stanem (kg)</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {topProductsLoading ? (
+              <Skeleton className="h-[200px] w-full" />
+            ) : topProducts && topProducts.length > 0 ? (
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart 
+                  data={topProducts}
+                  layout="vertical"
+                  margin={{ left: 20, right: 20 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis type="number" className="text-xs" />
+                  <YAxis 
+                    dataKey="product_name" 
+                    type="category" 
+                    width={100}
+                    className="text-xs"
+                    tickFormatter={(value) => value.length > 15 ? value.substring(0, 15) + "..." : value}
+                  />
+                  <Tooltip 
+                    formatter={(value: number) => [`${value.toLocaleString("pl-PL")} kg`, "Stan"]}
+                  />
+                  <Bar 
+                    dataKey="total_weight" 
+                    fill="hsl(var(--primary))" 
+                    radius={[0, 4, 4, 0]}
                   />
                 </BarChart>
-              </ChartContainer>
+              </ResponsiveContainer>
             ) : (
-              <div className="h-[200px] flex items-center justify-center text-muted-foreground">
-                Brak danych produkcyjnych
+              <div className="flex h-[200px] items-center justify-center text-muted-foreground">
+                Brak danych o stanach magazynowych
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Ostatnie operacje WMS + Szybkie akcje */}
+      <div className="grid gap-4 md:grid-cols-3">
+        {/* Ostatnie operacje WMS */}
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5" />
+              Ostatnie operacje WMS
+            </CardTitle>
+            <CardDescription>5 ostatnich dokumentów magazynowych</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {movementsLoading ? (
+              <div className="space-y-2">
+                {[...Array(5)].map((_, i) => (
+                  <Skeleton key={i} className="h-10 w-full" />
+                ))}
+              </div>
+            ) : recentMovements && recentMovements.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Dokument</TableHead>
+                    <TableHead>Typ</TableHead>
+                    <TableHead>Kontrahent</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Data</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {recentMovements.map((movement) => (
+                    <TableRow key={movement.id}>
+                      <TableCell className="font-medium">
+                        {movement.document_number}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getDocTypeBadgeVariant(movement.type)}>
+                          {movement.type}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {movement.contractor_name || "-"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getStatusBadgeVariant(movement.status)}>
+                          {movement.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {format(new Date(movement.created_at), "d MMM HH:mm", { locale: pl })}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="flex h-32 items-center justify-center text-muted-foreground">
+                Brak operacji magazynowych
               </div>
             )}
           </CardContent>
         </Card>
 
-        <Card className="shadow-industrial">
+        {/* Szybkie akcje */}
+        <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Status systemu</CardTitle>
-            <CardDescription>Moduły i integracje</CardDescription>
+            <CardTitle>Szybkie akcje</CardTitle>
+            <CardDescription>Najczęstsze operacje</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-success" />
-                <span className="text-sm">Core & IAM</span>
-              </div>
-              <span className="text-xs text-muted-foreground">Aktywny</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-success" />
-                <span className="text-sm">HR & Staffing</span>
-              </div>
-              <span className="text-xs text-muted-foreground">Aktywny</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-success" />
-                <span className="text-sm">WMS / MES</span>
-              </div>
-              <span className="text-xs text-muted-foreground">Aktywny</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-warning" />
-                <span className="text-sm">Bridge (IoT/Subiekt)</span>
-              </div>
-              <span className="text-xs text-muted-foreground">Planowany</span>
-            </div>
+          <CardContent className="space-y-2">
+            {quickActions.map((action) => (
+              <Button
+                key={action.path}
+                variant="outline"
+                className="w-full justify-start"
+                onClick={() => navigate(action.path)}
+              >
+                <action.icon className="mr-2 h-4 w-4" />
+                {action.label}
+              </Button>
+            ))}
           </CardContent>
         </Card>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <Card key={stat.title} className="shadow-industrial">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {stat.title}
-              </CardTitle>
-              <stat.icon className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
-              <p className="text-xs text-muted-foreground">{stat.subtitle}</p>
-              <p className="mt-1 text-xs text-primary">{stat.trend}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Quick Actions */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className="shadow-industrial">
-          <CardHeader>
-            <CardTitle className="text-lg">Szybkie akcje</CardTitle>
-            <CardDescription>Najczęściej używane funkcje</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-2">
-            <a
-              href="/companies"
-              className="flex items-center gap-3 rounded-md p-3 hover:bg-accent transition-colors"
-            >
-              <Building2 className="h-5 w-5 text-primary" />
-              <div>
-                <p className="font-medium">Zarządzaj spółkami</p>
-                <p className="text-sm text-muted-foreground">
-                  Dodaj lub edytuj strukturę organizacyjną
-                </p>
-              </div>
-            </a>
-            <a
-              href="/employees"
-              className="flex items-center gap-3 rounded-md p-3 hover:bg-accent transition-colors"
-            >
-              <Users className="h-5 w-5 text-primary" />
-              <div>
-                <p className="font-medium">Pracownicy</p>
-                <p className="text-sm text-muted-foreground">
-                  Generuj karty QR i zarządzaj danymi
-                </p>
-              </div>
-            </a>
-            <a
-              href="/production/orders"
-              className="flex items-center gap-3 rounded-md p-3 hover:bg-accent transition-colors"
-            >
-              <ClipboardList className="h-5 w-5 text-primary" />
-              <div>
-                <p className="font-medium">Zlecenia produkcyjne</p>
-                <p className="text-sm text-muted-foreground">
-                  Utwórz nowe zlecenie lub przejdź do terminala
-                </p>
-              </div>
-            </a>
-          </CardContent>
-        </Card>
-
-        {/* System Info */}
-        <Card className="border-muted bg-muted/10 shadow-industrial">
-          <CardHeader className="pb-2">
+      {/* Status systemu */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Status systemu</CardTitle>
+          <CardDescription>Informacje o aktualnym stanie</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-4 text-sm">
             <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-muted-foreground" />
-              <CardTitle className="text-base">Informacja</CardTitle>
+              <div className="h-2 w-2 rounded-full bg-green-500" />
+              <span>Baza danych: Online</span>
             </div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              System NARROW OPS jest w fazie rozwoju. Moduł Bridge (IoT/Subiekt GT) jest planowany
-              do wdrożenia w kolejnych etapach. Aktualnie dostępne są funkcje zarządzania strukturą
-              organizacyjną, magazynem, produkcją i logistyką.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-green-500" />
+              <span>Autoryzacja: Aktywna</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-green-500" />
+              <span>Sync: OK</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

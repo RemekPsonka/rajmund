@@ -103,6 +103,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "t_batches_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_stock_summary"
+            referencedColumns: ["product_id"]
+          },
+          {
             foreignKeyName: "t_batches_supplier_id_fkey"
             columns: ["supplier_id"]
             isOneToOne: false
@@ -668,6 +675,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "t_production_inputs_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_stock_summary"
+            referencedColumns: ["product_id"]
+          },
+          {
             foreignKeyName: "t_production_inputs_production_order_id_fkey"
             columns: ["production_order_id"]
             isOneToOne: false
@@ -770,6 +784,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "t_products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_production_logs_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_stock_summary"
+            referencedColumns: ["product_id"]
           },
           {
             foreignKeyName: "t_production_logs_production_order_id_fkey"
@@ -985,6 +1006,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "t_recipe_ingredients_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_stock_summary"
+            referencedColumns: ["product_id"]
+          },
+          {
             foreignKeyName: "t_recipe_ingredients_recipe_id_fkey"
             columns: ["recipe_id"]
             isOneToOne: false
@@ -1038,6 +1066,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "t_products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_recipes_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_stock_summary"
+            referencedColumns: ["product_id"]
           },
         ]
       }
@@ -1135,6 +1170,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "t_products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_shipment_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_stock_summary"
+            referencedColumns: ["product_id"]
           },
           {
             foreignKeyName: "t_shipment_items_shipment_id_fkey"
@@ -1467,11 +1509,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "t_warehouse_movement_items_movement_id_fkey"
+            columns: ["movement_id"]
+            isOneToOne: false
+            referencedRelation: "v_recent_movements"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "t_warehouse_movement_items_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "t_products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_warehouse_movement_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_stock_summary"
+            referencedColumns: ["product_id"]
           },
         ]
       }
@@ -1559,7 +1615,62 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      v_production_today: {
+        Row: {
+          company_id: string | null
+          facility_id: string | null
+          facility_name: string | null
+          logs_count: number | null
+          total_output_kg: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "t_production_orders_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "t_companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_production_orders_facility_id_fkey"
+            columns: ["facility_id"]
+            isOneToOne: false
+            referencedRelation: "t_facilities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_recent_movements: {
+        Row: {
+          contractor_name: string | null
+          created_at: string | null
+          document_number: string | null
+          facility_name: string | null
+          id: string | null
+          status: Database["public"]["Enums"]["document_status"] | null
+          type: Database["public"]["Enums"]["warehouse_doc_type"] | null
+        }
+        Relationships: []
+      }
+      v_stock_summary: {
+        Row: {
+          batch_count: number | null
+          company_id: string | null
+          product_id: string | null
+          product_name: string | null
+          sku: string | null
+          total_weight: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "t_products_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "t_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       calculate_production_yield: {
