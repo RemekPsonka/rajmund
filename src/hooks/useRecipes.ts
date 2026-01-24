@@ -108,7 +108,7 @@ export function useRecipeIngredients(recipeId: string | undefined) {
         .from("t_recipe_ingredients")
         .select(`
           *,
-          product:t_products(name, sku, unit)
+          product:t_products(name, sku, unit, industry_category)
         `)
         .eq("recipe_id", recipeId)
         .order("created_at");
@@ -117,6 +117,77 @@ export function useRecipeIngredients(recipeId: string | undefined) {
       return data as RecipeIngredient[];
     },
     enabled: !!recipeId,
+  });
+}
+
+// Save recipe with ingredients (create or update)
+export function useSaveRecipeWithIngredients() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      recipe,
+      ingredients,
+      existingRecipeId,
+    }: {
+      recipe: RecipeFormData;
+      ingredients: { product_id: string; amount_per_kg_base: number; unit: string }[];
+      existingRecipeId?: string;
+    }) => {
+      let recipeId = existingRecipeId;
+
+      // Create or update recipe
+      if (existingRecipeId) {
+        const { error } = await supabase
+          .from("t_recipes")
+          .update(recipe)
+          .eq("id", existingRecipeId);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase
+          .from("t_recipes")
+          .insert(recipe)
+          .select()
+          .single();
+        if (error) throw error;
+        recipeId = data.id;
+      }
+
+      // Delete existing ingredients if updating
+      if (existingRecipeId) {
+        const { error } = await supabase
+          .from("t_recipe_ingredients")
+          .delete()
+          .eq("recipe_id", existingRecipeId);
+        if (error) throw error;
+      }
+
+      // Insert new ingredients
+      if (ingredients.length > 0 && recipeId) {
+        const ingredientData = ingredients.map((ing) => ({
+          recipe_id: recipeId,
+          product_id: ing.product_id,
+          ratio: ing.amount_per_kg_base, // Keep ratio for backwards compatibility
+          amount_per_kg_base: ing.amount_per_kg_base,
+          unit: ing.unit,
+        }));
+
+        const { error } = await supabase
+          .from("t_recipe_ingredients")
+          .insert(ingredientData);
+        if (error) throw error;
+      }
+
+      return recipeId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["recipes"] });
+      queryClient.invalidateQueries({ queryKey: ["recipe-ingredients"] });
+      toast.success("Zapisano recepturę");
+    },
+    onError: (error) => {
+      toast.error(`Błąd: ${error.message}`);
+    },
   });
 }
 
