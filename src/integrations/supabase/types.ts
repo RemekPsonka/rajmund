@@ -690,18 +690,58 @@ export type Database = {
           },
         ]
       }
+      t_production_kebab_variants: {
+        Row: {
+          created_at: string | null
+          id: string
+          production_log_id: string | null
+          quantity: number | null
+          total_weight: number | null
+          variant_weight: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          production_log_id?: string | null
+          quantity?: number | null
+          total_weight?: number | null
+          variant_weight?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          production_log_id?: string | null
+          quantity?: number | null
+          total_weight?: number | null
+          variant_weight?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "t_production_kebab_variants_production_log_id_fkey"
+            columns: ["production_log_id"]
+            isOneToOne: false
+            referencedRelation: "t_production_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       t_production_logs: {
         Row: {
           created_at: string | null
+          deviation_kg: number | null
+          deviation_percent: number | null
           employee_id: string | null
+          expected_weight: number | null
           handling_unit_id: string | null
           id: string
           output_batch_id: string | null
           packaging_count: number | null
           packaging_type: string | null
           prepared_by_employee_id: string | null
+          process_stage: string | null
           product_id: string
           production_order_id: string
+          recipe_id: string | null
           scale_device_id: string | null
           source_batch_id: string | null
           weight_gross: number
@@ -710,15 +750,20 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          deviation_kg?: number | null
+          deviation_percent?: number | null
           employee_id?: string | null
+          expected_weight?: number | null
           handling_unit_id?: string | null
           id?: string
           output_batch_id?: string | null
           packaging_count?: number | null
           packaging_type?: string | null
           prepared_by_employee_id?: string | null
+          process_stage?: string | null
           product_id: string
           production_order_id: string
+          recipe_id?: string | null
           scale_device_id?: string | null
           source_batch_id?: string | null
           weight_gross: number
@@ -727,15 +772,20 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          deviation_kg?: number | null
+          deviation_percent?: number | null
           employee_id?: string | null
+          expected_weight?: number | null
           handling_unit_id?: string | null
           id?: string
           output_batch_id?: string | null
           packaging_count?: number | null
           packaging_type?: string | null
           prepared_by_employee_id?: string | null
+          process_stage?: string | null
           product_id?: string
           production_order_id?: string
+          recipe_id?: string | null
           scale_device_id?: string | null
           source_batch_id?: string | null
           weight_gross?: number
@@ -797,6 +847,13 @@ export type Database = {
             columns: ["production_order_id"]
             isOneToOne: false
             referencedRelation: "t_production_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_production_logs_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "t_recipes"
             referencedColumns: ["id"]
           },
           {
@@ -925,6 +982,7 @@ export type Database = {
           created_at: string | null
           default_expiration_days: number | null
           id: string
+          industry_category: string | null
           is_raw_material: boolean | null
           max_storage_temp: number | null
           min_storage_temp: number | null
@@ -939,6 +997,7 @@ export type Database = {
           created_at?: string | null
           default_expiration_days?: number | null
           id?: string
+          industry_category?: string | null
           is_raw_material?: boolean | null
           max_storage_temp?: number | null
           min_storage_temp?: number | null
@@ -953,6 +1012,7 @@ export type Database = {
           created_at?: string | null
           default_expiration_days?: number | null
           id?: string
+          industry_category?: string | null
           is_raw_material?: boolean | null
           max_storage_temp?: number | null
           min_storage_temp?: number | null
@@ -974,6 +1034,7 @@ export type Database = {
       }
       t_recipe_ingredients: {
         Row: {
+          amount_per_kg_base: number | null
           created_at: string | null
           id: string
           product_id: string
@@ -982,6 +1043,7 @@ export type Database = {
           unit: string | null
         }
         Insert: {
+          amount_per_kg_base?: number | null
           created_at?: string | null
           id?: string
           product_id: string
@@ -990,6 +1052,7 @@ export type Database = {
           unit?: string | null
         }
         Update: {
+          amount_per_kg_base?: number | null
           created_at?: string | null
           id?: string
           product_id?: string
@@ -1023,36 +1086,59 @@ export type Database = {
       }
       t_recipes: {
         Row: {
+          base_product_id: string | null
           company_id: string
           created_at: string | null
           description: string | null
           id: string
           is_active: boolean | null
           name: string
+          process_instructions: string | null
           product_id: string | null
+          target_yield_percent: number | null
           updated_at: string | null
         }
         Insert: {
+          base_product_id?: string | null
           company_id: string
           created_at?: string | null
           description?: string | null
           id?: string
           is_active?: boolean | null
           name: string
+          process_instructions?: string | null
           product_id?: string | null
+          target_yield_percent?: number | null
           updated_at?: string | null
         }
         Update: {
+          base_product_id?: string | null
           company_id?: string
           created_at?: string | null
           description?: string | null
           id?: string
           is_active?: boolean | null
           name?: string
+          process_instructions?: string | null
           product_id?: string | null
+          target_yield_percent?: number | null
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "t_recipes_base_product_id_fkey"
+            columns: ["base_product_id"]
+            isOneToOne: false
+            referencedRelation: "t_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_recipes_base_product_id_fkey"
+            columns: ["base_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_stock_summary"
+            referencedColumns: ["product_id"]
+          },
           {
             foreignKeyName: "t_recipes_company_id_fkey"
             columns: ["company_id"]
