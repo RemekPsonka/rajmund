@@ -287,3 +287,26 @@ export function useDeleteRecipeIngredient() {
     },
   });
 }
+
+// Delete recipe (soft delete - set is_active = false)
+export function useDeleteRecipe() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("t_recipes")
+        .update({ is_active: false })
+        .eq("id", id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["recipes"] });
+      toast.success("Usunięto recepturę");
+    },
+    onError: (error) => {
+      toast.error(`Błąd: ${error.message}`);
+    },
+  });
+}
