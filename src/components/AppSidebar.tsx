@@ -25,6 +25,8 @@ import {
   Users,
   UserCog,
   Briefcase,
+  Snowflake,
+  Layers3,
   Shield,
   Bell,
 } from "lucide-react";
@@ -77,6 +79,8 @@ const productionItems = [
   { title: "Analiza przepływu", url: "/production/analytics", icon: GitBranch },
   { title: "Terminal Wagowy", url: "/production/terminal", icon: Scale },
   { title: "Terminal Masowni", url: "/production/tumbler", icon: Cog },
+  { title: "Składanie Kebaba", url: "/production/assembly", icon: Layers3 },
+  { title: "Mrożenie Szokowe", url: "/production/freezing", icon: Snowflake },
   { title: "Paletyzacja", url: "/production/palletization", icon: PackageCheck },
 ];
 

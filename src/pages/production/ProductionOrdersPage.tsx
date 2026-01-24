@@ -62,6 +62,8 @@ const typeLabels: Record<ProductionOrderType, string> = {
   Decomposition: "Rozbiór",
   Processing: "Przetwórstwo",
   Packing: "Pakowanie",
+  Assembly: "Składanie Kebaba",
+  Freezing: "Mrożenie",
 };
 
 export default function ProductionOrdersPage() {

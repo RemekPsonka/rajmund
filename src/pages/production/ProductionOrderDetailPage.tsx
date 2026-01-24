@@ -52,6 +52,8 @@ const orderTypeLabels: Record<string, string> = {
   Decomposition: "Rozbiór",
   Processing: "Przetwórstwo",
   Packing: "Pakowanie",
+  Assembly: "Składanie Kebaba",
+  Freezing: "Mrożenie",
 };
 
 const statusVariants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {

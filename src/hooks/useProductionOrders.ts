@@ -2,8 +2,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-export type ProductionOrderType = "Decomposition" | "Processing" | "Packing";
+export type ProductionOrderType = "Decomposition" | "Processing" | "Packing" | "Assembly" | "Freezing";
 export type ProductionOrderStatus = "Open" | "Closed" | "Cancelled";
+export type ProcessStage = "Decomposition" | "Massaging" | "Stacking" | "ShockFreezing" | "Palletization";
 
 export interface ProductionOrder {
   id: string;
@@ -323,7 +324,23 @@ export function useCloseProductionOrder() {
 export function generateOrderNumber(type: ProductionOrderType): string {
   const now = new Date();
   const date = now.toISOString().slice(0, 10).replace(/-/g, "/");
-  const prefix = type === "Decomposition" ? "ROZ" : type === "Processing" ? "PRZ" : "PAK";
+  const prefixMap: Record<ProductionOrderType, string> = {
+    Decomposition: "ROZ",
+    Processing: "PRZ",
+    Packing: "PAK",
+    Assembly: "SKL",
+    Freezing: "MRZ",
+  };
+  const prefix = prefixMap[type] || "PRD";
   const random = Math.floor(Math.random() * 100).toString().padStart(2, "0");
   return `${prefix}/${date}/${random}`;
 }
+
+// Order type labels in Polish
+export const ORDER_TYPE_LABELS: Record<ProductionOrderType, string> = {
+  Decomposition: "Rozbiór",
+  Processing: "Przetwórstwo",
+  Packing: "Pakowanie",
+  Assembly: "Składanie Kebaba",
+  Freezing: "Mrożenie",
+};
