@@ -40,7 +40,7 @@ import {
 const orderSchema = z.object({
   company_id: z.string().min(1, "Wybierz spółkę"),
   facility_id: z.string().min(1, "Wybierz zakład"),
-  type: z.enum(["Decomposition", "Processing", "Packing"]),
+  type: z.enum(["Decomposition", "Processing", "Packing", "Assembly", "Freezing"]),
   production_date: z.string().min(1, "Wybierz datę"),
   notes: z.string().optional(),
 });
@@ -51,6 +51,8 @@ const typeOptions: { value: ProductionOrderType; label: string }[] = [
   { value: "Decomposition", label: "Rozbiór" },
   { value: "Processing", label: "Przetwórstwo" },
   { value: "Packing", label: "Pakowanie" },
+  { value: "Assembly", label: "Składanie Kebaba" },
+  { value: "Freezing", label: "Mrożenie" },
 ];
 
 interface ProductionOrderDrawerProps {

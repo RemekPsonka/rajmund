@@ -29,6 +29,8 @@ const ORDER_TYPE_LABELS: Record<string, string> = {
   Decomposition: "Rozbór",
   Processing: "Przetwórstwo",
   Packing: "Pakowanie",
+  Assembly: "Składanie Kebaba",
+  Freezing: "Mrożenie",
 };
 
 const PRESET_RANGES = [

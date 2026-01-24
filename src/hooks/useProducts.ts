@@ -3,18 +3,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 export type IndustryCategory = 
-  | 'RawMeat'      // Mięso Surowe
-  | 'Spice'        // Przyprawy
-  | 'Additive'     // Dodatki (woda, białko)
-  | 'Packaging'    // Opakowania
-  | 'Casing'       // Osłonki
-  | 'Waste'        // Odpad
+  | 'RawMeat'       // Mięso Surowe
+  | 'Spice'         // Przyprawy
+  | 'Additive'      // Dodatki (woda, białko)
+  | 'Packaging'     // Opakowania
+  | 'Casing'        // Osłonki
+  | 'Waste'         // Odpad
+  | 'SemiFinished'  // Półprodukt (masowane mięso)
   | 'FinishedGood'; // Wyrób gotowy
 
 export const INDUSTRY_CATEGORIES: { value: IndustryCategory; label: string; icon: string }[] = [
   { value: 'RawMeat', label: 'Mięso Surowe', icon: '🥩' },
   { value: 'Spice', label: 'Przyprawa', icon: '🧂' },
   { value: 'Additive', label: 'Dodatek (woda, białko)', icon: '💧' },
+  { value: 'SemiFinished', label: 'Półprodukt', icon: '🔄' },
   { value: 'Packaging', label: 'Opakowanie', icon: '📦' },
   { value: 'Casing', label: 'Osłonka', icon: '🌭' },
   { value: 'Waste', label: 'Odpad', icon: '🗑️' },

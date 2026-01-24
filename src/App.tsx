@@ -23,6 +23,8 @@ import ProductionOrderDetailPage from "./pages/production/ProductionOrderDetailP
 import ProductionAnalyticsPage from "./pages/production/ProductionAnalyticsPage";
 import WeighingTerminalPage from "./pages/production/WeighingTerminalPage";
 import TumblerTerminalPage from "./pages/production/TumblerTerminalPage";
+import KebabAssemblyTerminalPage from "./pages/production/KebabAssemblyTerminalPage";
+import ShockFreezingTerminalPage from "./pages/production/ShockFreezingTerminalPage";
 import PalletizationPage from "./pages/production/PalletizationPage";
 import ShipmentsPage from "./pages/shipping/ShipmentsPage";
 import ShipmentDetailPage from "./pages/shipping/ShipmentDetailPage";
@@ -92,6 +94,8 @@ const App = () => (
           {/* Terminals without layout - full screen */}
           <Route path="/production/terminal" element={<WeighingTerminalPage />} />
           <Route path="/production/tumbler" element={<TumblerTerminalPage />} />
+          <Route path="/production/assembly" element={<KebabAssemblyTerminalPage />} />
+          <Route path="/production/freezing" element={<ShockFreezingTerminalPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

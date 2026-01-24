@@ -697,6 +697,7 @@ export type Database = {
           production_log_id: string | null
           quantity: number | null
           total_weight: number | null
+          variant_name: string | null
           variant_weight: number | null
         }
         Insert: {
@@ -705,6 +706,7 @@ export type Database = {
           production_log_id?: string | null
           quantity?: number | null
           total_weight?: number | null
+          variant_name?: string | null
           variant_weight?: number | null
         }
         Update: {
@@ -713,6 +715,7 @@ export type Database = {
           production_log_id?: string | null
           quantity?: number | null
           total_weight?: number | null
+          variant_name?: string | null
           variant_weight?: number | null
         }
         Relationships: [
@@ -732,6 +735,9 @@ export type Database = {
           deviation_percent: number | null
           employee_id: string | null
           expected_weight: number | null
+          freezing_completed_at: string | null
+          freezing_duration_minutes: number | null
+          freezing_started_at: string | null
           handling_unit_id: string | null
           id: string
           output_batch_id: string | null
@@ -754,6 +760,9 @@ export type Database = {
           deviation_percent?: number | null
           employee_id?: string | null
           expected_weight?: number | null
+          freezing_completed_at?: string | null
+          freezing_duration_minutes?: number | null
+          freezing_started_at?: string | null
           handling_unit_id?: string | null
           id?: string
           output_batch_id?: string | null
@@ -776,6 +785,9 @@ export type Database = {
           deviation_percent?: number | null
           employee_id?: string | null
           expected_weight?: number | null
+          freezing_completed_at?: string | null
+          freezing_duration_minutes?: number | null
+          freezing_started_at?: string | null
           handling_unit_id?: string | null
           id?: string
           output_batch_id?: string | null
@@ -1844,7 +1856,12 @@ export type Database = {
       facility_type: "Plant" | "Warehouse" | "Office" | "Store"
       packaging_transaction_type: "Issued" | "Received"
       production_order_status: "Open" | "Closed" | "Cancelled"
-      production_order_type: "Decomposition" | "Processing" | "Packing"
+      production_order_type:
+        | "Decomposition"
+        | "Processing"
+        | "Packing"
+        | "Assembly"
+        | "Freezing"
       shipment_status: "Planning" | "Loading" | "Shipped" | "Delivered"
       warehouse_doc_type: "PZ" | "WZ" | "MM" | "RW" | "PW"
     }
@@ -1981,7 +1998,13 @@ export const Constants = {
       facility_type: ["Plant", "Warehouse", "Office", "Store"],
       packaging_transaction_type: ["Issued", "Received"],
       production_order_status: ["Open", "Closed", "Cancelled"],
-      production_order_type: ["Decomposition", "Processing", "Packing"],
+      production_order_type: [
+        "Decomposition",
+        "Processing",
+        "Packing",
+        "Assembly",
+        "Freezing",
+      ],
       shipment_status: ["Planning", "Loading", "Shipped", "Delivered"],
       warehouse_doc_type: ["PZ", "WZ", "MM", "RW", "PW"],
     },

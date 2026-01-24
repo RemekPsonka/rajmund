@@ -1,0 +1,415 @@
+import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { ArrowLeft, Snowflake, User, Scan, Play, Square, Clock, ThermometerSnowflake } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { toast } from "sonner";
+import { format } from "date-fns";
+import { pl } from "date-fns/locale";
+
+import { useProductionOrders } from "@/hooks/useProductionOrders";
+import { useEmployees } from "@/hooks/useEmployees";
+import { useCompanies } from "@/hooks/useCompanies";
+import { useFacilities } from "@/hooks/useFacilities";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+
+const FREEZING_CHAMBERS = [
+  { id: "chamber-1", name: "Komora 1 (-35°C)" },
+  { id: "chamber-2", name: "Komora 2 (-35°C)" },
+  { id: "chamber-3", name: "Komora 3 (-40°C)" },
+];
+
+interface FreezingItem {
+  id: string;
+  batchNumber: string;
+  productName: string;
+  weight: number;
+  startedAt: Date;
+  status: "freezing" | "completed";
+}
+
+export default function ShockFreezingTerminalPage() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  // Context
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
+  const [selectedFacilityId, setSelectedFacilityId] = useState<string>("");
+  const [selectedChamber, setSelectedChamber] = useState<string>("");
+  const [employeeCode, setEmployeeCode] = useState("");
+  const [verifiedEmployee, setVerifiedEmployee] = useState<{ id: string; name: string } | null>(null);
+
+  // Scanning
+  const [scanCode, setScanCode] = useState("");
+  
+  // Items in freezing
+  const [freezingItems, setFreezingItems] = useState<FreezingItem[]>([]);
+
+  // Data
+  const { data: companies } = useCompanies();
+  const { data: facilities } = useFacilities();
+  const { data: employees } = useEmployees();
+  const { data: orders } = useProductionOrders("Open");
+
+  // Filter facilities
+  const filteredFacilities = useMemo(() => 
+    facilities?.filter(f => f.company_id === selectedCompanyId) || [],
+    [facilities, selectedCompanyId]
+  );
+
+  // Filter freezing orders
+  const freezingOrders = useMemo(() => 
+    orders?.filter(o => o.type === "Freezing" && o.facility_id === selectedFacilityId) || [],
+    [orders, selectedFacilityId]
+  );
+
+  // Verify employee
+  const verifyEmployee = () => {
+    if (!employeeCode.trim()) {
+      toast.error("Wprowadź kod pracownika");
+      return;
+    }
+    const emp = employees?.find(e => e.qr_login_code === employeeCode.trim());
+    if (emp) {
+      setVerifiedEmployee({ id: emp.id, name: `${emp.first_name} ${emp.last_name}` });
+      toast.success(`Zalogowano: ${emp.first_name} ${emp.last_name}`);
+    } else {
+      toast.error("Nie znaleziono pracownika");
+    }
+  };
+
+  // Start freezing for scanned item
+  const handleStartFreezing = async () => {
+    if (!scanCode.trim()) {
+      toast.error("Zeskanuj produkt");
+      return;
+    }
+    if (!selectedChamber) {
+      toast.error("Wybierz komorę mrożenia");
+      return;
+    }
+    if (!verifiedEmployee) {
+      toast.error("Zaloguj pracownika");
+      return;
+    }
+
+    // Simulate finding a production log by batch number
+    // In real implementation, you'd query for t_production_logs with matching batch
+    const newItem: FreezingItem = {
+      id: crypto.randomUUID(),
+      batchNumber: scanCode,
+      productName: `Kebab (${scanCode})`,
+      weight: Math.random() * 20 + 5,
+      startedAt: new Date(),
+      status: "freezing",
+    };
+
+    setFreezingItems(prev => [...prev, newItem]);
+    setScanCode("");
+    
+    toast.success(`Rozpoczęto mrożenie: ${scanCode}`);
+  };
+
+  // Complete freezing for an item
+  const handleCompleteFreezing = async (itemId: string) => {
+    setFreezingItems(prev => 
+      prev.map(item => 
+        item.id === itemId 
+          ? { ...item, status: "completed" as const }
+          : item
+      )
+    );
+
+    const item = freezingItems.find(i => i.id === itemId);
+    if (item) {
+      const duration = Math.round((Date.now() - item.startedAt.getTime()) / 60000);
+      toast.success(`Zakończono mrożenie: ${item.batchNumber} (${duration} min)`);
+    }
+  };
+
+  // Get duration string
+  const getDuration = (startedAt: Date) => {
+    const minutes = Math.round((Date.now() - startedAt.getTime()) / 60000);
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    const remainingMins = minutes % 60;
+    return `${hours}h ${remainingMins}m`;
+  };
+
+  // Calculate totals
+  const activeCount = freezingItems.filter(i => i.status === "freezing").length;
+  const completedCount = freezingItems.filter(i => i.status === "completed").length;
+  const totalWeight = freezingItems.reduce((sum, i) => sum + i.weight, 0);
+
+  // Check if ready
+  const canOperate = selectedCompanyId && selectedFacilityId && selectedChamber && verifiedEmployee;
+
+  return (
+    <div className="min-h-screen bg-background p-4">
+      {/* Header */}
+      <div className="flex items-center gap-4 mb-6">
+        <Button variant="outline" size="icon" onClick={() => navigate(-1)}>
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-blue-500/20 rounded-lg">
+            <Snowflake className="h-8 w-8 text-blue-500" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Mrożenie Szokowe</h1>
+            <p className="text-muted-foreground">Terminal kontroli procesu mrożenia</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Left Column - Context */}
+        <div className="space-y-4">
+          {/* Company Selection */}
+          <Card>
+            <CardContent className="pt-4 space-y-4">
+              <div>
+                <label className="text-sm text-muted-foreground">Spółka</label>
+                <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
+                  <SelectTrigger className="h-12">
+                    <SelectValue placeholder="Wybierz spółkę" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {companies?.map(c => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.short_name || c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="text-sm text-muted-foreground">Zakład</label>
+                <Select 
+                  value={selectedFacilityId} 
+                  onValueChange={setSelectedFacilityId}
+                  disabled={!selectedCompanyId}
+                >
+                  <SelectTrigger className="h-12">
+                    <SelectValue placeholder="Wybierz zakład" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filteredFacilities.map(f => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="text-sm text-muted-foreground">Komora mrożenia</label>
+                <Select value={selectedChamber} onValueChange={setSelectedChamber}>
+                  <SelectTrigger className="h-12">
+                    <SelectValue placeholder="Wybierz komorę" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FREEZING_CHAMBERS.map(c => (
+                      <SelectItem key={c.id} value={c.id}>
+                        <div className="flex items-center gap-2">
+                          <ThermometerSnowflake className="h-4 w-4 text-blue-500" />
+                          {c.name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Employee */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <User className="h-5 w-5" />
+                Pracownik
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {verifiedEmployee ? (
+                <div className="flex items-center justify-between p-3 bg-primary/10 rounded-lg">
+                  <span className="font-medium">{verifiedEmployee.name}</span>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => {
+                      setVerifiedEmployee(null);
+                      setEmployeeCode("");
+                    }}
+                  >
+                    Zmień
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Kod pracownika"
+                    value={employeeCode}
+                    onChange={(e) => setEmployeeCode(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && verifyEmployee()}
+                    className="h-12"
+                  />
+                  <Button onClick={verifyEmployee} size="lg">
+                    <User className="h-5 w-5" />
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Stats */}
+          <Card className="bg-blue-500/10 border-blue-500/20">
+            <CardContent className="pt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center">
+                  <p className="text-3xl font-bold text-blue-500">{activeCount}</p>
+                  <p className="text-sm text-muted-foreground">W mrożeniu</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-3xl font-bold text-green-500">{completedCount}</p>
+                  <p className="text-sm text-muted-foreground">Zakończone</p>
+                </div>
+              </div>
+              <div className="mt-4 pt-4 border-t text-center">
+                <p className="text-2xl font-bold">{totalWeight.toFixed(1)} kg</p>
+                <p className="text-sm text-muted-foreground">Łączna waga</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Center - Scanning & Action */}
+        <div className="lg:col-span-3 space-y-4">
+          {/* Scan Input */}
+          <Card className={!canOperate ? "opacity-50" : ""}>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Scan className="h-5 w-5" />
+                Skanowanie Produktu
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-4">
+                <Input
+                  placeholder="Zeskanuj kod partii lub produktu"
+                  value={scanCode}
+                  onChange={(e) => setScanCode(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleStartFreezing()}
+                  className="h-14 text-xl"
+                  disabled={!canOperate}
+                />
+                <Button 
+                  onClick={handleStartFreezing}
+                  className="h-14 px-8"
+                  disabled={!canOperate || !scanCode.trim()}
+                >
+                  <Play className="h-5 w-5 mr-2" />
+                  Rozpocznij Mrożenie
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Freezing Items Table */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Clock className="h-5 w-5" />
+                Produkty w Mrożeniu
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {freezingItems.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Snowflake className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                  <p>Brak produktów w mrożeniu</p>
+                  <p className="text-sm">Zeskanuj produkt, aby rozpocząć proces</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Nr Partii</TableHead>
+                      <TableHead>Produkt</TableHead>
+                      <TableHead className="text-right">Waga</TableHead>
+                      <TableHead>Czas mrożenia</TableHead>
+                      <TableHead className="text-right">Akcja</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {freezingItems.map(item => (
+                      <TableRow key={item.id}>
+                        <TableCell>
+                          <Badge 
+                            variant={item.status === "freezing" ? "default" : "secondary"}
+                            className={item.status === "freezing" ? "bg-blue-500" : ""}
+                          >
+                            {item.status === "freezing" ? (
+                              <><Snowflake className="h-3 w-3 mr-1 animate-pulse" /> Mrożenie</>
+                            ) : (
+                              "Zakończone"
+                            )}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-mono">{item.batchNumber}</TableCell>
+                        <TableCell>{item.productName}</TableCell>
+                        <TableCell className="text-right font-mono">
+                          {item.weight.toFixed(2)} kg
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-muted-foreground" />
+                            {getDuration(item.startedAt)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {item.status === "freezing" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleCompleteFreezing(item.id)}
+                            >
+                              <Square className="h-4 w-4 mr-1" />
+                              Zakończ
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
