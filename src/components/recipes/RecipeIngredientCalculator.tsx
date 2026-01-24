@@ -18,12 +18,14 @@ import { INDUSTRY_CATEGORIES } from "@/hooks/useProducts";
 interface RecipeIngredientCalculatorProps {
   ingredients: RecipeIngredient[];
   targetYieldPercent?: number | null;
+  evaporationPercent?: number | null;
   baseProductName?: string;
 }
 
 export function RecipeIngredientCalculator({
   ingredients,
   targetYieldPercent,
+  evaporationPercent,
   baseProductName,
 }: RecipeIngredientCalculatorProps) {
   const [baseWeight, setBaseWeight] = useState<string>("100");
@@ -45,10 +47,14 @@ export function RecipeIngredientCalculator({
   // Total additives
   const totalAdditives = ingredients.reduce((sum, ing) => sum + calculateAmount(ing), 0);
 
-  // Expected output
-  const expectedOutput = targetYieldPercent
-    ? (baseWeightNum * targetYieldPercent) / 100
-    : baseWeightNum + totalAdditives;
+  // Theoretical output (base + additives)
+  const theoreticalOutput = baseWeightNum + totalAdditives;
+
+  // Calculate evaporation loss
+  const evapLoss = theoreticalOutput * ((evaporationPercent || 0) / 100);
+
+  // Real output after evaporation
+  const realOutput = theoreticalOutput - evapLoss;
 
   const getCategoryBadge = (productCategory: string | undefined | null) => {
     if (!productCategory) return null;
@@ -138,15 +144,25 @@ export function RecipeIngredientCalculator({
             <span className="text-muted-foreground">Suma dodatków:</span>
             <span className="font-mono font-medium">{totalAdditives.toFixed(2)} kg</span>
           </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Masa teoretyczna:</span>
+            <span className="font-mono font-medium text-blue-600 dark:text-blue-400">{theoreticalOutput.toFixed(2)} kg</span>
+          </div>
+          {(evaporationPercent || 0) > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Odparowanie ({evaporationPercent?.toFixed(2)}%):</span>
+              <span className="font-mono font-medium text-orange-600 dark:text-orange-400">-{evapLoss.toFixed(2)} kg</span>
+            </div>
+          )}
           <div className="flex justify-between items-center pt-2 border-t">
-            <span className="font-medium">Przewidywana masa końcowa:</span>
+            <span className="font-medium">Masa końcowa (realna):</span>
             <Badge variant="default" className="text-lg font-mono px-3 py-1">
-              {expectedOutput.toFixed(2)} kg
+              {realOutput.toFixed(2)} kg
             </Badge>
           </div>
           {targetYieldPercent && (
             <p className="text-xs text-muted-foreground text-right">
-              (uzysk docelowy: {targetYieldPercent}%)
+              (uzysk realny: {targetYieldPercent.toFixed(2)}%)
             </p>
           )}
         </div>

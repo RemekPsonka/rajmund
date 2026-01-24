@@ -74,12 +74,28 @@ export function RecipeDetailSheet({
                 <p className="font-medium">✅ {recipe.product.name}</p>
               </div>
             )}
-            {recipe.target_yield_percent && (
-              <div>
-                <Label className="text-xs text-muted-foreground">Uzysk docelowy</Label>
-                <Badge variant="outline">{recipe.target_yield_percent}%</Badge>
+          </div>
+
+          {/* Yield Section */}
+          <div className="grid grid-cols-3 gap-4 p-4 bg-muted/30 rounded-lg border">
+            <div className="text-center">
+              <Label className="text-xs text-muted-foreground">Uzysk teoretyczny</Label>
+              <div className="text-xl font-bold text-blue-600 dark:text-blue-400">
+                {(100 + ingredients.reduce((sum, ing) => sum + ((ing.amount_per_kg_base || ing.ratio) * 100), 0)).toFixed(2)}%
               </div>
-            )}
+            </div>
+            <div className="text-center">
+              <Label className="text-xs text-muted-foreground">Odparowanie</Label>
+              <div className="text-xl font-bold text-orange-600 dark:text-orange-400">
+                {(recipe.evaporation_percent || 0).toFixed(2)}%
+              </div>
+            </div>
+            <div className="text-center">
+              <Label className="text-xs text-muted-foreground">Uzysk realny</Label>
+              <div className="text-xl font-bold text-green-600 dark:text-green-400">
+                {(recipe.target_yield_percent || 100).toFixed(2)}%
+              </div>
+            </div>
           </div>
 
           {recipe.description && (
@@ -140,6 +156,7 @@ export function RecipeDetailSheet({
           <RecipeIngredientCalculator
             ingredients={ingredients}
             targetYieldPercent={recipe.target_yield_percent}
+            evaporationPercent={recipe.evaporation_percent}
             baseProductName={recipe.base_product?.name}
           />
         </div>

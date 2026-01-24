@@ -11,6 +11,7 @@ export interface Recipe {
   description: string | null;
   is_active: boolean;
   target_yield_percent: number | null;
+  evaporation_percent: number | null;
   process_instructions: string | null;
   created_at: string;
   updated_at: string;
@@ -38,6 +39,7 @@ export interface RecipeFormData {
   name: string;
   description?: string;
   target_yield_percent?: number;
+  evaporation_percent?: number;
   process_instructions?: string;
 }
 
