@@ -125,37 +125,36 @@ export default function RecipesPage() {
 
   return (
     <div className="container mx-auto py-6 space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Header with title and company selector */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-2xl font-bold">Receptury</h1>
-        <Button onClick={handleOpenCreate} disabled={!selectedCompanyId}>
+        <div className="flex items-center gap-3">
+          <Label className="text-sm text-muted-foreground whitespace-nowrap">Spółka:</Label>
+          <Select
+            value={selectedCompanyId}
+            onValueChange={setSelectedCompanyId}
+          >
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Wybierz spółkę" />
+            </SelectTrigger>
+            <SelectContent>
+              {companies?.map((company) => (
+                <SelectItem key={company.id} value={company.id}>
+                  {company.short_name || company.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Add Recipe Button */}
+      {selectedCompanyId && (
+        <Button onClick={handleOpenCreate} size="lg">
           <Plus className="h-4 w-4 mr-2" />
           Nowa receptura
         </Button>
-      </div>
-
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="space-y-2 max-w-sm">
-            <Label>Spółka</Label>
-            <Select
-              value={selectedCompanyId}
-              onValueChange={setSelectedCompanyId}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Wybierz spółkę" />
-              </SelectTrigger>
-              <SelectContent>
-                {companies?.map((company) => (
-                  <SelectItem key={company.id} value={company.id}>
-                    {company.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+      )}
 
       {/* Recipes Table */}
       <Card>
