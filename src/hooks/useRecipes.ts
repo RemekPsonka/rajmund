@@ -6,13 +6,17 @@ export interface Recipe {
   id: string;
   company_id: string;
   product_id: string | null;
+  base_product_id: string | null;
   name: string;
   description: string | null;
   is_active: boolean;
+  target_yield_percent: number | null;
+  process_instructions: string | null;
   created_at: string;
   updated_at: string;
   // Joined
-  product?: { name: string; sku: string | null };
+  product?: { name: string; sku: string | null } | null;
+  base_product?: { name: string; sku: string | null } | null;
 }
 
 export interface RecipeIngredient {
@@ -21,6 +25,7 @@ export interface RecipeIngredient {
   product_id: string;
   ratio: number;
   unit: string;
+  amount_per_kg_base: number | null;
   created_at: string;
   // Joined
   product?: { name: string; sku: string | null; unit: string };
@@ -29,8 +34,11 @@ export interface RecipeIngredient {
 export interface RecipeFormData {
   company_id: string;
   product_id?: string;
+  base_product_id?: string;
   name: string;
   description?: string;
+  target_yield_percent?: number;
+  process_instructions?: string;
 }
 
 export interface RecipeIngredientFormData {
@@ -38,6 +46,7 @@ export interface RecipeIngredientFormData {
   product_id: string;
   ratio: number;
   unit?: string;
+  amount_per_kg_base?: number;
 }
 
 // Fetch recipes
@@ -49,7 +58,8 @@ export function useRecipes(companyId?: string) {
         .from("t_recipes")
         .select(`
           *,
-          product:t_products(name, sku)
+          product:t_products!product_id(name, sku),
+          base_product:t_products!base_product_id(name, sku)
         `)
         .eq("is_active", true)
         .order("name");
@@ -75,7 +85,8 @@ export function useRecipe(id: string | undefined) {
         .from("t_recipes")
         .select(`
           *,
-          product:t_products(name, sku)
+          product:t_products!product_id(name, sku),
+          base_product:t_products!base_product_id(name, sku)
         `)
         .eq("id", id)
         .maybeSingle();
@@ -127,6 +138,32 @@ export function useCreateRecipe() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["recipes"] });
       toast.success("Utworzono recepturę");
+    },
+    onError: (error) => {
+      toast.error(`Błąd: ${error.message}`);
+    },
+  });
+}
+
+// Update recipe
+export function useUpdateRecipe() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string } & Partial<RecipeFormData>) => {
+      const { data: result, error } = await supabase
+        .from("t_recipes")
+        .update(data)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["recipes"] });
+      toast.success("Zaktualizowano recepturę");
     },
     onError: (error) => {
       toast.error(`Błąd: ${error.message}`);
