@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -68,7 +68,7 @@ export function RecipeFormDialog({
   const [name, setName] = useState("");
   const [baseProductId, setBaseProductId] = useState("");
   const [productId, setProductId] = useState("");
-  const [targetYieldPercent, setTargetYieldPercent] = useState("100");
+  const [evaporationPercent, setEvaporationPercent] = useState("0");
   const [description, setDescription] = useState("");
   const [processInstructions, setProcessInstructions] = useState("");
 
@@ -86,6 +86,21 @@ export function RecipeFormDialog({
     p.industry_category === 'Casing'
   );
 
+  // Calculate theoretical yield from ingredients (100% base + ingredients as %)
+  const theoreticalYield = useMemo(() => {
+    const ingredientsSum = ingredients.reduce(
+      (sum, ing) => sum + (ing.amount_per_kg_base * 100), // Convert to percentage
+      0
+    );
+    return 100 + ingredientsSum;
+  }, [ingredients]);
+
+  // Calculate real yield = theoretical - evaporation
+  const realYield = useMemo(() => {
+    const evap = parseFloat(evaporationPercent) || 0;
+    return theoreticalYield * (1 - evap / 100);
+  }, [theoreticalYield, evaporationPercent]);
+
   // Reset form when opening
   useEffect(() => {
     if (open) {
@@ -93,7 +108,7 @@ export function RecipeFormDialog({
         setName(recipe.name);
         setBaseProductId(recipe.base_product_id || "");
         setProductId(recipe.product_id || "");
-        setTargetYieldPercent(recipe.target_yield_percent?.toString() || "100");
+        setEvaporationPercent(recipe.evaporation_percent?.toString() || "0");
         setDescription(recipe.description || "");
         setProcessInstructions(recipe.process_instructions || "");
         
@@ -112,7 +127,7 @@ export function RecipeFormDialog({
         setName("");
         setBaseProductId("");
         setProductId("");
-        setTargetYieldPercent("100");
+        setEvaporationPercent("0");
         setDescription("");
         setProcessInstructions("");
         setIngredients([]);
@@ -166,7 +181,8 @@ export function RecipeFormDialog({
         name: name.trim(),
         base_product_id: baseProductId || undefined,
         product_id: productId || undefined,
-        target_yield_percent: parseFloat(targetYieldPercent) || 100,
+        target_yield_percent: realYield, // Save real yield
+        evaporation_percent: parseFloat(evaporationPercent) || 0,
         description: description || undefined,
         process_instructions: processInstructions || undefined,
       },
@@ -243,20 +259,40 @@ export function RecipeFormDialog({
               </div>
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="yield">Uzysk docelowy (%)</Label>
-              <Input
-                id="yield"
-                type="number"
-                step="0.1"
-                placeholder="120"
-                value={targetYieldPercent}
-                onChange={(e) => setTargetYieldPercent(e.target.value)}
-                className="w-32"
-              />
-              <p className="text-xs text-muted-foreground">
-                Np. 120% = z 100 kg mięsa powstanie 120 kg masy (po dodaniu wody/przypraw)
-              </p>
+            {/* Yield Section */}
+            <div className="grid grid-cols-3 gap-4 p-4 bg-muted/30 rounded-lg border">
+              {/* Theoretical Yield - read-only */}
+              <div className="text-center">
+                <Label className="text-xs text-muted-foreground">Uzysk teoretyczny</Label>
+                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                  {theoreticalYield.toFixed(2)}%
+                </div>
+                <p className="text-xs text-muted-foreground">z receptury</p>
+              </div>
+
+              {/* Evaporation - editable */}
+              <div className="text-center">
+                <Label className="text-xs">Odparowanie</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="50"
+                  value={evaporationPercent}
+                  onChange={(e) => setEvaporationPercent(e.target.value)}
+                  className="text-center w-24 mx-auto mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">%</p>
+              </div>
+
+              {/* Real Yield - read-only */}
+              <div className="text-center">
+                <Label className="text-xs text-muted-foreground">Uzysk realny</Label>
+                <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                  {realYield.toFixed(2)}%
+                </div>
+                <p className="text-xs text-muted-foreground">po odparowaniu</p>
+              </div>
             </div>
           </div>
 

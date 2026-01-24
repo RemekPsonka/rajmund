@@ -1100,6 +1100,7 @@ export type Database = {
           company_id: string
           created_at: string | null
           description: string | null
+          evaporation_percent: number | null
           id: string
           is_active: boolean | null
           name: string
@@ -1113,6 +1114,7 @@ export type Database = {
           company_id: string
           created_at?: string | null
           description?: string | null
+          evaporation_percent?: number | null
           id?: string
           is_active?: boolean | null
           name: string
@@ -1126,6 +1128,7 @@ export type Database = {
           company_id?: string
           created_at?: string | null
           description?: string | null
+          evaporation_percent?: number | null
           id?: string
           is_active?: boolean | null
           name?: string
