@@ -26,10 +26,7 @@ import {
   useRecipes,
   useRecipe,
   useRecipeIngredients,
-  useCreateRecipe,
-  useUpdateRecipe,
-  useAddRecipeIngredient,
-  useDeleteRecipeIngredient,
+  useSaveRecipeWithIngredients,
 } from "@/hooks/useRecipes";
 import { RecipeFormDialog } from "@/components/recipes/RecipeFormDialog";
 import { RecipeDetailSheet } from "@/components/recipes/RecipeDetailSheet";
@@ -51,10 +48,7 @@ export default function RecipesPage() {
     selectedRecipeId || undefined
   );
 
-  const createRecipe = useCreateRecipe();
-  const updateRecipe = useUpdateRecipe();
-  const addIngredient = useAddRecipeIngredient();
-  const deleteIngredient = useDeleteRecipeIngredient();
+  const saveRecipe = useSaveRecipeWithIngredients();
 
   const companyProducts =
     products?.filter((p) => p.company_id === selectedCompanyId) || [];
@@ -76,26 +70,15 @@ export default function RecipesPage() {
     setFormDialogOpen(true);
   };
 
-  const handleFormSubmit = async (data: Parameters<typeof createRecipe.mutateAsync>[0]) => {
-    if (editMode && selectedRecipeId) {
-      await updateRecipe.mutateAsync({ id: selectedRecipeId, ...data });
-    } else {
-      await createRecipe.mutateAsync(data);
-    }
-  };
-
-  const handleAddIngredient = async (data: {
-    recipe_id: string;
-    product_id: string;
-    ratio: number;
-    amount_per_kg_base?: number;
-  }) => {
-    await addIngredient.mutateAsync(data);
-  };
-
-  const handleDeleteIngredient = async (id: string) => {
-    if (!selectedRecipeId) return;
-    await deleteIngredient.mutateAsync({ id, recipeId: selectedRecipeId });
+  const handleFormSubmit = async (
+    data: Parameters<typeof saveRecipe.mutateAsync>[0]['recipe'],
+    ingredientsList: { product_id: string; amount_per_kg_base: number; unit: string }[]
+  ) => {
+    await saveRecipe.mutateAsync({
+      recipe: data,
+      ingredients: ingredientsList,
+      existingRecipeId: editMode && selectedRecipeId ? selectedRecipeId : undefined,
+    });
   };
 
   if (loadingCompanies) {
@@ -179,7 +162,7 @@ export default function RecipesPage() {
                     <TableCell>
                       {recipe.base_product ? (
                         <Badge variant="secondary">
-                          {recipe.base_product.name}
+                          🥩 {recipe.base_product.name}
                         </Badge>
                       ) : (
                         <span className="text-muted-foreground">—</span>
@@ -187,7 +170,7 @@ export default function RecipesPage() {
                     </TableCell>
                     <TableCell>
                       {recipe.product ? (
-                        <Badge variant="outline">{recipe.product.name}</Badge>
+                        <Badge variant="outline">✅ {recipe.product.name}</Badge>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
@@ -221,8 +204,9 @@ export default function RecipesPage() {
         companyId={selectedCompanyId}
         products={companyProducts}
         recipe={editMode ? selectedRecipe : null}
+        existingIngredients={editMode ? ingredients : undefined}
         onSubmit={handleFormSubmit}
-        isPending={createRecipe.isPending || updateRecipe.isPending}
+        isPending={saveRecipe.isPending}
       />
 
       {/* Detail Sheet */}
@@ -233,9 +217,6 @@ export default function RecipesPage() {
         ingredients={ingredients || []}
         products={companyProducts}
         onEdit={handleOpenEdit}
-        onAddIngredient={handleAddIngredient}
-        onDeleteIngredient={handleDeleteIngredient}
-        addPending={addIngredient.isPending}
       />
     </div>
   );

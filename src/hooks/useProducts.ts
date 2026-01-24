@@ -2,6 +2,25 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+export type IndustryCategory = 
+  | 'RawMeat'      // Mięso Surowe
+  | 'Spice'        // Przyprawy
+  | 'Additive'     // Dodatki (woda, białko)
+  | 'Packaging'    // Opakowania
+  | 'Casing'       // Osłonki
+  | 'Waste'        // Odpad
+  | 'FinishedGood'; // Wyrób gotowy
+
+export const INDUSTRY_CATEGORIES: { value: IndustryCategory; label: string; icon: string }[] = [
+  { value: 'RawMeat', label: 'Mięso Surowe', icon: '🥩' },
+  { value: 'Spice', label: 'Przyprawa', icon: '🧂' },
+  { value: 'Additive', label: 'Dodatek (woda, białko)', icon: '💧' },
+  { value: 'Packaging', label: 'Opakowanie', icon: '📦' },
+  { value: 'Casing', label: 'Osłonka', icon: '🌭' },
+  { value: 'Waste', label: 'Odpad', icon: '🗑️' },
+  { value: 'FinishedGood', label: 'Wyrób Gotowy', icon: '✅' },
+];
+
 export interface Product {
   id: string;
   company_id: string;
@@ -10,6 +29,7 @@ export interface Product {
   subiekt_id: string | null;
   unit: string;
   is_raw_material: boolean;
+  industry_category: IndustryCategory | null;
   default_expiration_days: number | null;
   min_storage_temp: number | null;
   max_storage_temp: number | null;
@@ -23,6 +43,7 @@ export interface ProductFormData {
   sku?: string;
   unit?: string;
   is_raw_material?: boolean;
+  industry_category?: IndustryCategory;
   default_expiration_days?: number;
   min_storage_temp?: number;
   max_storage_temp?: number;

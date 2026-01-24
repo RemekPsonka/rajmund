@@ -875,6 +875,7 @@ export type Database = {
           notes: string | null
           order_number: string
           production_date: string | null
+          recipe_id: string | null
           status: Database["public"]["Enums"]["production_order_status"] | null
           supervisor_id: string | null
           type: Database["public"]["Enums"]["production_order_type"] | null
@@ -889,6 +890,7 @@ export type Database = {
           notes?: string | null
           order_number: string
           production_date?: string | null
+          recipe_id?: string | null
           status?: Database["public"]["Enums"]["production_order_status"] | null
           supervisor_id?: string | null
           type?: Database["public"]["Enums"]["production_order_type"] | null
@@ -903,6 +905,7 @@ export type Database = {
           notes?: string | null
           order_number?: string
           production_date?: string | null
+          recipe_id?: string | null
           status?: Database["public"]["Enums"]["production_order_status"] | null
           supervisor_id?: string | null
           type?: Database["public"]["Enums"]["production_order_type"] | null
@@ -921,6 +924,13 @@ export type Database = {
             columns: ["facility_id"]
             isOneToOne: false
             referencedRelation: "t_facilities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_production_orders_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "t_recipes"
             referencedColumns: ["id"]
           },
         ]

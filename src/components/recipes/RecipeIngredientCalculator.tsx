@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { Calculator } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -10,89 +12,115 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Calculator } from "lucide-react";
-import { RecipeIngredient } from "@/hooks/useRecipes";
+import type { RecipeIngredient } from "@/hooks/useRecipes";
+import { INDUSTRY_CATEGORIES } from "@/hooks/useProducts";
 
 interface RecipeIngredientCalculatorProps {
   ingredients: RecipeIngredient[];
   targetYieldPercent?: number | null;
+  baseProductName?: string;
 }
 
 export function RecipeIngredientCalculator({
   ingredients,
   targetYieldPercent,
+  baseProductName,
 }: RecipeIngredientCalculatorProps) {
   const [baseWeight, setBaseWeight] = useState<string>("100");
 
   const baseWeightNum = parseFloat(baseWeight) || 0;
 
+  if (ingredients.length === 0) {
+    return null;
+  }
+
+  // Calculate amounts for each ingredient
   const calculateAmount = (ingredient: RecipeIngredient): number => {
-    // If amount_per_kg_base is set, use it (grams per kg of base)
     if (ingredient.amount_per_kg_base) {
       return baseWeightNum * ingredient.amount_per_kg_base;
     }
-    // Otherwise use ratio
-    return baseWeightNum * ingredient.ratio;
+    return ingredient.ratio * baseWeightNum;
   };
 
-  const totalIngredients = ingredients.reduce(
-    (sum, ing) => sum + calculateAmount(ing),
-    0
-  );
+  // Total additives
+  const totalAdditives = ingredients.reduce((sum, ing) => sum + calculateAmount(ing), 0);
 
-  const expectedOutput =
-    targetYieldPercent && targetYieldPercent > 0
-      ? (baseWeightNum * targetYieldPercent) / 100
-      : baseWeightNum + totalIngredients;
+  // Expected output
+  const expectedOutput = targetYieldPercent
+    ? (baseWeightNum * targetYieldPercent) / 100
+    : baseWeightNum + totalAdditives;
 
-  if (!ingredients.length) {
-    return null;
-  }
+  const getCategoryBadge = (productCategory: string | undefined | null) => {
+    if (!productCategory) return null;
+    const cat = INDUSTRY_CATEGORIES.find(c => c.value === productCategory);
+    if (!cat) return null;
+    return (
+      <Badge variant="outline" className="text-xs">
+        {cat.icon}
+      </Badge>
+    );
+  };
 
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
-          <Calculator className="h-4 w-4" />
+          <Calculator className="h-5 w-5" />
           Kalkulator składników
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label>Waga bazowa surowca (kg)</Label>
-          <Input
-            type="number"
-            step="0.1"
-            min="0"
-            value={baseWeight}
-            onChange={(e) => setBaseWeight(e.target.value)}
-            className="max-w-[200px]"
-          />
+        {/* Base Weight Input */}
+        <div className="flex items-end gap-4 p-3 bg-muted/50 rounded-lg">
+          <div className="flex-1">
+            <Label htmlFor="base-weight" className="text-sm">
+              Waga surowca bazowego {baseProductName && `(${baseProductName})`}
+            </Label>
+            <div className="flex items-center gap-2 mt-1">
+              <Input
+                id="base-weight"
+                type="number"
+                step="0.1"
+                min="0"
+                className="w-32 text-lg font-mono"
+                value={baseWeight}
+                onChange={(e) => setBaseWeight(e.target.value)}
+              />
+              <span className="text-muted-foreground font-medium">kg</span>
+            </div>
+          </div>
         </div>
 
+        {/* Ingredients Table */}
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead></TableHead>
               <TableHead>Składnik</TableHead>
-              <TableHead className="text-right">Współczynnik</TableHead>
-              <TableHead className="text-right">Ilość</TableHead>
+              <TableHead className="text-right">Na kg</TableHead>
+              <TableHead className="text-right">Potrzeba</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {ingredients.map((ing) => {
-              const amount = calculateAmount(ing);
-              const unit = ing.product?.unit || "kg";
+            {ingredients.map((ingredient) => {
+              const amount = calculateAmount(ingredient);
+              // Try to find category from joined product
+              const productData = ingredient.product as { name?: string; sku?: string | null; unit?: string; industry_category?: string } | undefined;
+              const category = productData && 'industry_category' in productData ? productData.industry_category : null;
+              
               return (
-                <TableRow key={ing.id}>
-                  <TableCell>{ing.product?.name || "—"}</TableCell>
-                  <TableCell className="text-right font-mono text-muted-foreground">
-                    {ing.amount_per_kg_base
-                      ? `${ing.amount_per_kg_base.toFixed(4)} /kg`
-                      : `×${ing.ratio.toFixed(2)}`}
+                <TableRow key={ingredient.id}>
+                  <TableCell className="w-10">
+                    {getCategoryBadge(category)}
+                  </TableCell>
+                  <TableCell className="font-medium">
+                    {ingredient.product?.name || "Nieznany"}
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-sm text-muted-foreground">
+                    {(ingredient.amount_per_kg_base || ingredient.ratio).toFixed(3)} {ingredient.unit}
                   </TableCell>
                   <TableCell className="text-right font-mono font-medium">
-                    {amount.toFixed(2)} {unit}
+                    {amount.toFixed(2)} {ingredient.unit}
                   </TableCell>
                 </TableRow>
               );
@@ -100,26 +128,26 @@ export function RecipeIngredientCalculator({
           </TableBody>
         </Table>
 
-        <div className="border-t pt-3 space-y-2">
+        {/* Summary */}
+        <div className="border-t pt-4 space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Surowiec bazowy:</span>
             <span className="font-mono font-medium">{baseWeightNum.toFixed(2)} kg</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Suma dodatków:</span>
-            <span className="font-mono font-medium">{totalIngredients.toFixed(2)} kg</span>
+            <span className="font-mono font-medium">{totalAdditives.toFixed(2)} kg</span>
           </div>
           <div className="flex justify-between items-center pt-2 border-t">
             <span className="font-medium">Przewidywana masa końcowa:</span>
-            <Badge variant="secondary" className="font-mono text-base">
+            <Badge variant="default" className="text-lg font-mono px-3 py-1">
               {expectedOutput.toFixed(2)} kg
             </Badge>
           </div>
           {targetYieldPercent && (
-            <div className="flex justify-between text-sm text-muted-foreground">
-              <span>Uzysk docelowy:</span>
-              <span>{targetYieldPercent}%</span>
-            </div>
+            <p className="text-xs text-muted-foreground text-right">
+              (uzysk docelowy: {targetYieldPercent}%)
+            </p>
           )}
         </div>
       </CardContent>

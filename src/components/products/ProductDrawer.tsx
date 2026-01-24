@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useCreateProduct, useUpdateProduct, type Product } from "@/hooks/useProducts";
+import { useCreateProduct, useUpdateProduct, type Product, INDUSTRY_CATEGORIES, type IndustryCategory } from "@/hooks/useProducts";
 import { useCompanies } from "@/hooks/useCompanies";
 
 const productSchema = z.object({
@@ -38,6 +38,7 @@ const productSchema = z.object({
   sku: z.string().optional(),
   unit: z.string().default("kg"),
   is_raw_material: z.boolean().default(true),
+  industry_category: z.string().optional(),
   default_expiration_days: z.coerce.number().optional(),
   min_storage_temp: z.coerce.number().optional(),
   max_storage_temp: z.coerce.number().optional(),
@@ -65,6 +66,7 @@ export function ProductDrawer({ open, onClose, product }: ProductDrawerProps) {
       sku: "",
       unit: "kg",
       is_raw_material: true,
+      industry_category: undefined,
       default_expiration_days: undefined,
       min_storage_temp: undefined,
       max_storage_temp: undefined,
@@ -79,6 +81,7 @@ export function ProductDrawer({ open, onClose, product }: ProductDrawerProps) {
         sku: product.sku || "",
         unit: product.unit,
         is_raw_material: product.is_raw_material,
+        industry_category: product.industry_category || undefined,
         default_expiration_days: product.default_expiration_days || undefined,
         min_storage_temp: product.min_storage_temp || undefined,
         max_storage_temp: product.max_storage_temp || undefined,
@@ -90,6 +93,7 @@ export function ProductDrawer({ open, onClose, product }: ProductDrawerProps) {
         sku: "",
         unit: "kg",
         is_raw_material: true,
+        industry_category: undefined,
         default_expiration_days: undefined,
         min_storage_temp: undefined,
         max_storage_temp: undefined,
@@ -105,6 +109,7 @@ export function ProductDrawer({ open, onClose, product }: ProductDrawerProps) {
         sku: values.sku || undefined,
         unit: values.unit,
         is_raw_material: values.is_raw_material,
+        industry_category: values.industry_category as IndustryCategory | undefined,
         default_expiration_days: values.default_expiration_days,
         min_storage_temp: values.min_storage_temp,
         max_storage_temp: values.max_storage_temp,
@@ -217,6 +222,34 @@ export function ProductDrawer({ open, onClose, product }: ProductDrawerProps) {
                   )}
                 />
               </div>
+
+              <FormField
+                control={form.control}
+                name="industry_category"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Kategoria branżowa</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Wybierz kategorię" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {INDUSTRY_CATEGORIES.map((cat) => (
+                          <SelectItem key={cat.value} value={cat.value}>
+                            {cat.icon} {cat.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Określa typ produktu w procesie produkcyjnym
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <FormField
                 control={form.control}
