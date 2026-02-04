@@ -1,5 +1,5 @@
-import { useState, useRef } from "react";
-import { Search, Layers, AlertCircle, CheckCircle, Clock, MoreHorizontal, Printer, Filter } from "lucide-react";
+import { useState, useRef, useMemo } from "react";
+import { Search, Layers, AlertCircle, CheckCircle, Clock, MoreHorizontal, Printer, Filter, ChevronLeft, ChevronRight } from "lucide-react";
 import { useBatches, useUpdateBatchStatus, type BatchStatus, type Batch } from "@/hooks/useBatches";
 import { useCompanies } from "@/hooks/useCompanies";
 import { useStorageLocations } from "@/hooks/useStorageLocations";
@@ -55,6 +55,8 @@ const LOCATION_TYPE_COLORS: Record<string, string> = {
   storage: "bg-gray-500",
 };
 
+const ITEMS_PER_PAGE = 50;
+
 export default function BatchesPage() {
   const { data: batches, isLoading } = useBatches();
   const { data: companies } = useCompanies();
@@ -64,21 +66,42 @@ export default function BatchesPage() {
   const [locationFilter, setLocationFilter] = useState<string>("all");
   const [selectedBatch, setSelectedBatch] = useState<Batch | null>(null);
   const [labelDialogOpen, setLabelDialogOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const labelRef = useRef<HTMLDivElement>(null);
 
-  const filteredBatches = batches?.filter((batch) => {
-    const matchesSearch =
-      batch.internal_batch_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      batch.supplier_batch_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      batch.product?.name.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesLocation = 
-      locationFilter === "all" ||
-      (locationFilter === "none" && !batch.location_id) ||
-      batch.location_id === locationFilter;
+  const filteredBatches = useMemo(() => {
+    return batches?.filter((batch) => {
+      const matchesSearch =
+        batch.internal_batch_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        batch.supplier_batch_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        batch.product?.name.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesLocation = 
+        locationFilter === "all" ||
+        (locationFilter === "none" && !batch.location_id) ||
+        batch.location_id === locationFilter;
 
-    return matchesSearch && matchesLocation;
-  });
+      return matchesSearch && matchesLocation;
+    });
+  }, [batches, searchQuery, locationFilter]);
+
+  // Pagination
+  const totalPages = Math.ceil((filteredBatches?.length || 0) / ITEMS_PER_PAGE);
+  const paginatedBatches = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredBatches?.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredBatches, currentPage]);
+
+  // Reset page when filters change
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    setCurrentPage(1);
+  };
+
+  const handleLocationFilterChange = (value: string) => {
+    setLocationFilter(value);
+    setCurrentPage(1);
+  };
 
   const handleStatusChange = (batchId: string, newStatus: BatchStatus) => {
     updateStatus.mutate({ id: batchId, status: newStatus });
@@ -162,17 +185,17 @@ export default function BatchesPage() {
       </div>
 
       {/* Search and Filters */}
-      <div className="flex flex-wrap gap-4">
+      <div className="flex flex-wrap gap-4 items-center">
         <div className="relative flex-1 min-w-[200px] max-w-md">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Szukaj po numerze partii lub produkcie..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             className="pl-10"
           />
         </div>
-        <Select value={locationFilter} onValueChange={setLocationFilter}>
+        <Select value={locationFilter} onValueChange={handleLocationFilterChange}>
           <SelectTrigger className="w-[200px]">
             <Filter className="h-4 w-4 mr-2" />
             <SelectValue placeholder="Filtruj lokalizację" />
@@ -190,6 +213,11 @@ export default function BatchesPage() {
             ))}
           </SelectContent>
         </Select>
+        {filteredBatches && filteredBatches.length > 0 && (
+          <span className="text-sm text-muted-foreground ml-auto">
+            Wyświetlono {((currentPage - 1) * ITEMS_PER_PAGE) + 1}-{Math.min(currentPage * ITEMS_PER_PAGE, filteredBatches.length)} z {filteredBatches.length}
+          </span>
+        )}
       </div>
 
       {/* Batches Table */}
@@ -233,7 +261,7 @@ export default function BatchesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredBatches?.map((batch) => {
+                {paginatedBatches?.map((batch) => {
                   const status = statusConfig[batch.status];
                   const StatusIcon = status.icon;
                   const expired = isExpired(batch.expiration_date);
@@ -329,6 +357,55 @@ export default function BatchesPage() {
               </Table>
             </CardContent>
           </Card>
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Poprzednia
+            </Button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum: number;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={currentPage === pageNum ? "default" : "outline"}
+                    size="sm"
+                    className="w-10"
+                    onClick={() => setCurrentPage(pageNum)}
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+            >
+              Następna
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         )}
 
         {/* Label Print Dialog */}

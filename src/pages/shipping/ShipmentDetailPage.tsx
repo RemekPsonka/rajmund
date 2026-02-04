@@ -205,6 +205,19 @@ export default function ShipmentDetailPage() {
   const generatePDF = async (type: "hdi" | "packing" | "cmr") => {
     if (!shipment) return;
 
+    // CMR validation - require transport data
+    if (type === "cmr") {
+      const missingFields: string[] = [];
+      if (!shipment.driver_name) missingFields.push("kierowca");
+      if (!shipment.truck_plates) missingFields.push("nr rejestracyjny ciągnika");
+      if (!shipment.customer_id) missingFields.push("odbiorca");
+      
+      if (missingFields.length > 0) {
+        toast.error(`Uzupełnij dane transportu przed wygenerowaniem CMR: ${missingFields.join(", ")}`);
+        return;
+      }
+    }
+
     let doc;
     const companyData = {
       name: shipment.company?.name || "",
