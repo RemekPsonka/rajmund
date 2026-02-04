@@ -1,121 +1,136 @@
 
-## Plan: Dodanie edycji użytkownika i zmiany hasła
+## Plan: Rozbudowa Terminala Masowni o Start Procesu i Wybór Receptury
 
-### Zakres zmian
+### Zidentyfikowane problemy
 
-Rozszerzę panel edycji użytkownika o:
-1. **Wyświetlanie email** (tylko do odczytu - informacyjnie)
-2. **Zmiana hasła** przez administratora
-3. **Lepszy UX** z zakładkami w dialogu edycji
-
----
+1. **Brak etapu "Start procesu"** - terminal przeskakuje z dodawania wsadu bezpośrednio do wyjścia
+2. **Brak możliwości przypisania receptury** - kolumna `recipe_id` istnieje w bazie, ale UI jej nie obsługuje  
+3. **Brak receptur w systemie** - tabela `t_recipes` jest pusta (trzeba najpierw utworzyć receptury w ustawieniach)
 
 ### Architektura rozwiązania
 
-Zmiana hasła użytkownika przez admina wymaga **backend function**, ponieważ:
-- Supabase Auth Admin API (`updateUserById`) wymaga `service_role` key
-- Ten klucz NIE może być ujawniony w kodzie frontendowym
+Rozszerzę przepływ terminala z 2 do 3 kroków:
 
 ```text
-┌─────────────────┐     ┌──────────────────────┐     ┌─────────────────┐
-│   Admin Panel   │────►│  Edge Function       │────►│  Supabase Auth  │
-│   (Frontend)    │     │  admin-update-user   │     │  Admin API      │
-└─────────────────┘     └──────────────────────┘     └─────────────────┘
-        │                        │
-        │  { userId, password }  │  service_role key
-        └────────────────────────┘
+┌────────────┐     ┌─────────────────┐     ┌─────────────┐
+│ 1. WSAD    │────►│ 2. START        │────►│ 3. WYJŚCIE  │
+│ (Input)    │     │ (Receptura)     │     │ (Output)    │
+└────────────┘     └─────────────────┘     └─────────────┘
+     │                    │                      │
+     ▼                    ▼                      ▼
+  Skanuj partia      Wybierz recepturę      Waż wyroby
+  wsadowe            Ustaw parametry        gotowe
+                     START PROCESU
 ```
 
 ---
 
 ### Szczegóły techniczne
 
-#### 1. Nowa Edge Function: `admin-update-user`
+#### 1. Aktualizacja interfejsu `ProductionOrder`
 
-| Plik | Opis |
-|------|------|
-| `supabase/functions/admin-update-user/index.ts` | Endpoint do aktualizacji hasła użytkownika |
-
-Funkcja będzie:
-- Sprawdzać autoryzację (tylko global_admin może zmieniać hasła)
-- Używać Supabase Admin API do aktualizacji hasła
-- Zwracać status operacji
+Dodanie pola `recipe_id` i `machine_id` do interfejsu TypeScript:
 
 ```typescript
-// Szkic logiki
-const supabaseAdmin = createClient(url, SERVICE_ROLE_KEY);
-await supabaseAdmin.auth.admin.updateUserById(userId, { password });
+// src/hooks/useProductionOrders.ts
+export interface ProductionOrder {
+  // ... istniejące pola
+  recipe_id: string | null;
+  machine_id: string | null;
+}
 ```
 
-#### 2. Aktualizacja hooka `useUsers.ts`
-
-Nowy hook: `useUpdateUserPassword`
+#### 2. Nowy hook do aktualizacji zlecenia
 
 ```typescript
-export function useUpdateUserPassword() {
+// src/hooks/useProductionOrders.ts
+export function useUpdateProductionOrder() {
   return useMutation({
-    mutationFn: async ({ userId, password }) => {
-      const response = await supabase.functions.invoke('admin-update-user', {
-        body: { userId, password }
-      });
-      if (response.error) throw response.error;
-      return response.data;
+    mutationFn: async ({ id, ...data }) => {
+      const { error } = await supabase
+        .from("t_production_orders")
+        .update(data)
+        .eq("id", id);
+      if (error) throw error;
     },
-    // ...
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["production-orders"] });
+    },
   });
 }
 ```
 
-#### 3. Rozszerzony dialog edycji w `UsersPage.tsx`
+#### 3. Rozszerzenie TumblerTerminalPage.tsx
 
-Nowe elementy UI:
-- Sekcja z emailem użytkownika (readonly)
-- Pole nowego hasła z walidacją (min 6 znaków)
-- Przycisk "Zmień hasło" (oddzielna akcja od zapisywania nazwy)
+| Element | Zmiana |
+|---------|--------|
+| **Step state** | `"input" \| "processing" \| "output"` (dodany środkowy krok) |
+| **Receptura** | Dropdown z listą receptur dla wybranej firmy |
+| **Start procesu** | Przycisk zapisujący `recipe_id` i `machine_id` do zlecenia |
+| **Wskaźnik kroków** | 3 kroki zamiast 2 |
+
+#### 4. Nowy komponent: Panel startu procesu
+
+Nowy etap w terminalu:
 
 ```text
-┌─────────────────────────────────────────┐
-│  Edycja użytkownika                     │
-├─────────────────────────────────────────┤
-│  Email: jan.kowalski@firma.pl (readonly)│
-│                                         │
-│  Imię i nazwisko: [Jan Kowalski     ]   │
-│                                         │
-│  ─────── Zmiana hasła ───────           │
-│  Nowe hasło:       [••••••••        ]   │
-│  Potwierdź hasło:  [••••••••        ]   │
-│                                         │
-│  [Anuluj]              [Zapisz zmiany]  │
-└─────────────────────────────────────────┘
+┌─────────────────────────────────────────────┐
+│ 2. START PROCESU                            │
+├─────────────────────────────────────────────┤
+│                                             │
+│  Receptura: [▼ Wybierz recepturę        ]   │
+│                                             │
+│  ┌─────────────────────────────────────┐    │
+│  │ Składniki receptury:                │    │
+│  │ • Mięso kurczaka 60%  - 0.60 kg/kg  │    │
+│  │ • Przyprawa kebab     - 0.02 kg/kg  │    │
+│  │ • Sól                 - 0.01 kg/kg  │    │
+│  └─────────────────────────────────────┘    │
+│                                             │
+│  Oczekiwany uzysk: 85%                      │
+│  Parowanie: 3%                              │
+│                                             │
+│  [        🟢 START PROCESU        ]         │
+│                                             │
+└─────────────────────────────────────────────┘
 ```
 
 ---
 
-### Pliki do utworzenia/modyfikacji
+### Pliki do modyfikacji
 
 | Plik | Akcja | Opis |
 |------|-------|------|
-| `supabase/functions/admin-update-user/index.ts` | Utwórz | Edge function do zmiany hasła |
-| `src/hooks/useUsers.ts` | Edytuj | Dodaj hook `useUpdateUserPassword` |
-| `src/pages/settings/UsersPage.tsx` | Edytuj | Rozszerz dialog edycji o hasło i email |
+| `src/hooks/useProductionOrders.ts` | Edytuj | Dodaj `useUpdateProductionOrder`, rozszerz interfejs |
+| `src/pages/production/TumblerTerminalPage.tsx` | Edytuj | Dodaj krok "Start procesu" z wyborem receptury |
 
 ---
 
-### Bezpieczeństwo
+### Przepływ użytkownika (po zmianie)
 
-1. **Weryfikacja uprawnień** - Edge function sprawdzi czy wywołujący ma rolę `global_admin`
-2. **Walidacja hasła** - Minimum 6 znaków, maksymalnie 72 (limit bcrypt)
-3. **Audit log** - Logowanie operacji zmiany hasła w konsoli
-4. **Service Role Key** - Przechowywany jako secret, niedostępny z frontendu
+1. **Wybór zlecenia i maszyny** (bez zmian)
+2. **Krok 1 - Wsad**: Skanowanie partii wsadowych (bez zmian)
+3. **Krok 2 - Start procesu** (NOWY):
+   - Wybór receptury z listy
+   - Podgląd składników i parametrów
+   - Przycisk "START PROCESU" zapisuje `recipe_id` i `machine_id` do zlecenia
+4. **Krok 3 - Wyjście**: Ważenie wyrobów gotowych (bez zmian)
 
 ---
 
-### Przepływ użytkownika
+### Uwaga: Wymagane receptury
 
-1. Admin klika ikonę edycji przy użytkowniku
-2. Otwiera się dialog z danymi użytkownika
-3. Admin może:
-   - Zmienić imię i nazwisko → Zapisz
-   - Wpisać nowe hasło → Zmień hasło
-4. Po zmianie hasła - toast z potwierdzeniem
-5. Użytkownik może się zalogować nowym hasłem
+Aby krok "Start procesu" działał, system musi mieć utworzone receptury. Sprawdzenie pokazało, że **tabela t_recipes jest obecnie pusta**. 
+
+Po wdrożeniu tej zmiany, użytkownik będzie musiał:
+1. Przejść do Ustawienia → Receptury
+2. Utworzyć recepturę dla masy kebabowej
+3. Wrócić do Terminala Masowni i wybrać utworzoną recepturę
+
+---
+
+### Zależności
+
+- Import hooka `useRecipes` z `@/hooks/useRecipes`
+- Import hooka `useRecipeIngredients` do wyświetlenia składników
+- Nowy hook `useUpdateProductionOrder` do zapisania `recipe_id`
