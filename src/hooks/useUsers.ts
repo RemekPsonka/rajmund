@@ -218,3 +218,30 @@ export function useInviteUser() {
     },
   });
 }
+
+export function useUpdateUserPassword() {
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      password,
+    }: {
+      userId: string;
+      password: string;
+    }) => {
+      const { data, error } = await supabase.functions.invoke("admin-update-user", {
+        body: { userId, password },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("Hasło użytkownika zostało zmienione");
+    },
+    onError: (error) => {
+      toast.error("Błąd zmiany hasła: " + error.message);
+    },
+  });
+}

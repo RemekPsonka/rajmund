@@ -59,11 +59,13 @@ import {
   useAddUserRole,
   useRemoveUserRole,
   useInviteUser,
+  useUpdateUserPassword,
   type AppUser,
   type UserRole,
 } from "@/hooks/useUsers";
 import { useCompanies } from "@/hooks/useCompanies";
 import { useFacilities } from "@/hooks/useFacilities";
+import { Separator } from "@/components/ui/separator";
 
 const ROLE_LABELS: Record<string, string> = {
   global_admin: "Administrator Globalny",
@@ -94,9 +96,12 @@ export default function UsersPage() {
   const addRole = useAddUserRole();
   const removeRole = useRemoveUserRole();
   const inviteUser = useInviteUser();
+  const updatePassword = useUpdateUserPassword();
 
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
   const [editFullName, setEditFullName] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const [addingRoleUser, setAddingRoleUser] = useState<AppUser | null>(null);
   const [newRole, setNewRole] = useState<string>("");
@@ -115,6 +120,8 @@ export default function UsersPage() {
   const handleEditUser = (user: AppUser) => {
     setEditingUser(user);
     setEditFullName(user.full_name || "");
+    setNewPassword("");
+    setConfirmPassword("");
   };
 
   const handleSaveUser = () => {
@@ -122,7 +129,35 @@ export default function UsersPage() {
     updateUser.mutate(
       { userId: editingUser.id, fullName: editFullName },
       {
-        onSuccess: () => setEditingUser(null),
+        onSuccess: () => {
+          setEditingUser(null);
+          setNewPassword("");
+          setConfirmPassword("");
+        },
+      }
+    );
+  };
+
+  const handleChangePassword = () => {
+    if (!editingUser) return;
+    
+    if (newPassword.length < 6) {
+      toast.error("Hasło musi mieć minimum 6 znaków");
+      return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+      toast.error("Hasła nie są identyczne");
+      return;
+    }
+    
+    updatePassword.mutate(
+      { userId: editingUser.id, password: newPassword },
+      {
+        onSuccess: () => {
+          setNewPassword("");
+          setConfirmPassword("");
+        },
       }
     );
   };
@@ -327,14 +362,26 @@ export default function UsersPage() {
 
       {/* Edit User Dialog */}
       <Dialog open={!!editingUser} onOpenChange={() => setEditingUser(null)}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Edycja użytkownika</DialogTitle>
             <DialogDescription>
-              Zmień dane profilu użytkownika
+              Zmień dane profilu użytkownika lub ustaw nowe hasło
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input
+                value={editingUser?.id.slice(0, 8) + "..." || ""}
+                disabled
+                className="bg-muted"
+              />
+              <p className="text-xs text-muted-foreground">
+                ID użytkownika (email niedostępny z poziomu API)
+              </p>
+            </div>
+            
             <div className="space-y-2">
               <Label htmlFor="fullName">Imię i nazwisko</Label>
               <Input
@@ -344,13 +391,42 @@ export default function UsersPage() {
                 placeholder="Jan Kowalski"
               />
             </div>
+            
+            <Separator className="my-4" />
+            
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Zmiana hasła</Label>
+              <div className="space-y-2">
+                <Input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Nowe hasło (min. 6 znaków)"
+                />
+                <Input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Potwierdź hasło"
+                />
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleChangePassword}
+                disabled={!newPassword || !confirmPassword || updatePassword.isPending}
+                className="w-full"
+              >
+                {updatePassword.isPending ? "Zmienianie..." : "Zmień hasło"}
+              </Button>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingUser(null)}>
               Anuluj
             </Button>
             <Button onClick={handleSaveUser} disabled={updateUser.isPending}>
-              Zapisz
+              Zapisz dane
             </Button>
           </DialogFooter>
         </DialogContent>
