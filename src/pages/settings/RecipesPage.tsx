@@ -208,9 +208,19 @@ export default function RecipesPage() {
                       )}
                     </TableCell>
                     <TableCell className="text-right font-mono">
-                      {recipe.target_yield_percent
-                        ? `${recipe.target_yield_percent}%`
-                        : "—"}
+                      {recipe.target_yield_percent != null ? (
+                        recipe.target_yield_percent <= 0 ? (
+                          <Badge variant="destructive" className="font-mono">
+                            ⚠️ Błąd ({recipe.target_yield_percent}%)
+                          </Badge>
+                        ) : (
+                          <span className="text-green-600 dark:text-green-400 font-semibold">
+                            {recipe.target_yield_percent.toFixed(1)}%
+                          </span>
+                        )
+                      ) : (
+                        "—"
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">

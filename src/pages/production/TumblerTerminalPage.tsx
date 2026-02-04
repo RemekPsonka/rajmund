@@ -302,18 +302,22 @@ export default function TumblerTerminalPage() {
   };
 
   // Calculate theoretical and real yield for selected recipe
-  const theoreticalYield = useMemo(() => {
+  const recipeYieldInfo = useMemo(() => {
     if (!selectedRecipe) return null;
     
     const ingredientsTotal = recipeIngredients?.reduce((sum, ing) => sum + (ing.amount_per_kg_base || ing.ratio), 0) || 0;
     const theoretical = (1 + ingredientsTotal) * 100;
     const evaporation = selectedRecipe.evaporation_percent || 0;
-    const real = theoretical * (1 - evaporation / 100);
+    const realValue = theoretical * (1 - evaporation / 100);
+    // Safeguard: never show negative yield
+    const real = Math.max(0, realValue);
+    const isInvalid = realValue <= 0;
     
     return {
       theoretical: theoretical.toFixed(1),
       evaporation,
       real: real.toFixed(1),
+      isInvalid,
     };
   }, [selectedRecipe, recipeIngredients]);
 
@@ -661,19 +665,28 @@ export default function TumblerTerminalPage() {
                     )}
 
                     {/* Yield info */}
-                    {theoreticalYield && (
+                    {recipeYieldInfo && (
                       <div className="grid grid-cols-3 gap-2 text-center">
                         <div className="bg-muted/30 rounded p-2">
                           <p className="text-xs text-muted-foreground">Teoretyczny uzysk</p>
-                          <p className="font-bold">{theoreticalYield.theoretical}%</p>
+                          <p className="font-bold">{recipeYieldInfo.theoretical}%</p>
                         </div>
                         <div className="bg-muted/30 rounded p-2">
                           <p className="text-xs text-muted-foreground">Parowanie</p>
-                          <p className="font-bold">{theoreticalYield.evaporation}%</p>
+                          <p className="font-bold">{recipeYieldInfo.evaporation}%</p>
                         </div>
-                        <div className="bg-success/10 rounded p-2 border border-success/30">
+                        <div className={cn(
+                          "rounded p-2 border",
+                          recipeYieldInfo.isInvalid 
+                            ? "bg-destructive/10 border-destructive/30" 
+                            : "bg-success/10 border-success/30"
+                        )}>
                           <p className="text-xs text-muted-foreground">Realny uzysk</p>
-                          <p className="font-bold text-success">{theoreticalYield.real}%</p>
+                          {recipeYieldInfo.isInvalid ? (
+                            <p className="font-bold text-destructive">⚠️ Błąd</p>
+                          ) : (
+                            <p className="font-bold text-success">{recipeYieldInfo.real}%</p>
+                          )}
                         </div>
                       </div>
                     )}

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 import {
   Dialog,
@@ -179,6 +180,20 @@ export function RecipeFormDialog({
       return;
     }
 
+    const evap = parseFloat(evaporationPercent) || 0;
+    
+    // Validation: evaporation max 50%
+    if (evap > 50) {
+      toast.error("Parowanie nie może przekraczać 50%");
+      return;
+    }
+    
+    // Validation: real yield must be positive
+    if (realYield <= 0) {
+      toast.error("Uzysk musi być dodatni - zmniejsz parowanie lub dodaj składniki");
+      return;
+    }
+
     await onSubmit(
       {
         company_id: companyId,
@@ -186,7 +201,7 @@ export function RecipeFormDialog({
         base_product_id: baseProductId || undefined,
         product_id: productId || undefined,
         target_yield_percent: realYield, // Save real yield
-        evaporation_percent: parseFloat(evaporationPercent) || 0,
+        evaporation_percent: evap,
         description: description || undefined,
         process_instructions: processInstructions || undefined,
       },
@@ -295,10 +310,18 @@ export function RecipeFormDialog({
               {/* Real Yield - read-only */}
               <div className="text-center">
                 <Label className="text-xs text-muted-foreground">Uzysk realny</Label>
-                <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                <div className={cn(
+                  "text-2xl font-bold",
+                  realYield > 0 ? "text-green-600 dark:text-green-400" : "text-destructive"
+                )}>
                   {realYield.toFixed(2)}%
                 </div>
-                <p className="text-xs text-muted-foreground">po odparowaniu</p>
+                {realYield <= 0 && (
+                  <p className="text-xs text-destructive font-medium">⚠️ Uzysk musi być dodatni</p>
+                )}
+                {realYield > 0 && (
+                  <p className="text-xs text-muted-foreground">po odparowaniu</p>
+                )}
               </div>
             </div>
           </div>
