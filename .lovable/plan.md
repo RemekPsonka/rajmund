@@ -1,199 +1,373 @@
 
 
-## Pełny Audyt Funkcji `simulate_full_production_day()` - Krok po Kroku
+# Plan Naprawy Systemu NARROW ERP
 
-### Podsumowanie: Znaleziony błąd
+## Podsumowanie
+
+Zidentyfikowano **29 problemów** podzielonych na **29 osobnych zadań naprawczych**. Każde zadanie rozwiązuje dokładnie jeden problem.
+
+---
+
+## FAZA 1: Bezpieczeństwo (Krytyczne)
+
+### Zadanie 1.1: Zabezpieczenie terminali produkcyjnych
+**Problem**: Terminale `/production/terminal`, `/production/tumbler`, `/production/assembly`, `/production/freezing` są dostępne bez logowania.
+
+**Rozwiązanie**: Przenieść trasy terminali do grupy `<ProtectedRoute>` w `App.tsx`.
+
+| Plik | Zmiana |
+|------|--------|
+| `src/App.tsx` | Przenieść linie 95-98 do sekcji chronionych tras |
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│ LINIA 95 - INSERT INTO t_shipments                              │
-│                                                                 │
-│   status: 'shipped'    ❌  BŁĄD - małe litery                   │
-│   status: 'Shipped'    ✅  POPRAWNA wartość enum                │
-│                                                                 │
-│ Dozwolone wartości enum shipment_status:                        │
-│   • 'Planning'                                                  │
-│   • 'Loading'                                                   │
-│   • 'Shipped'     ← wymagane S z wielkiej litery                │
-│   • 'Delivered'                                                 │
-└─────────────────────────────────────────────────────────────────┘
+PRZED:
+<Route path="/production/terminal" element={<WeighingTerminalPage />} />
+(poza ProtectedRoute)
+
+PO:
+<Route element={<ProtectedRoute />}>
+  <Route path="/production/terminal" element={<WeighingTerminalPage />} />
+</Route>
 ```
 
 ---
 
-### Audyt Krok po Kroku - Wszystkie INSERT
+### Zadanie 1.2: Włączenie ochrony przed wyciekniętymi hasłami
+**Problem**: Supabase Auth nie sprawdza haseł w bazach wycieków (HaveIBeenPwned).
 
-#### 1. t_companies (linia 34) ✅ OK
-```sql
-INSERT INTO t_companies (name, short_name, tax_id, is_active) 
-VALUES ('Kebab Test Factory', 'KTF', 'PL1234567890', true)
-```
-| Kolumna | Wartość | Typ w DB | Status |
-|---------|---------|----------|--------|
-| name | 'Kebab Test Factory' | text NOT NULL | ✅ |
-| short_name | 'KTF' | text | ✅ |
-| tax_id | 'PL1234567890' | text NOT NULL | ✅ |
-| is_active | true | boolean | ✅ |
+**Rozwiązanie**: Użyć narzędzia `configure-auth` aby włączyć `leaked_password_protection`.
 
-#### 2. t_facilities (linia 35) ✅ OK
-```sql
-INSERT INTO t_facilities (company_id, name, type) 
-VALUES (v_company_id, 'Zakład Produkcyjny', 'Plant')
-```
-| Kolumna | Wartość | Typ w DB | Dozwolone | Status |
-|---------|---------|----------|-----------|--------|
-| type | 'Plant' | facility_type enum | Plant, Warehouse, Office, Store | ✅ |
-
-#### 3. t_storage_locations (linia 36) ✅ OK
-```sql
-INSERT INTO t_storage_locations (facility_id, name, location_type, min_temp, max_temp, is_active) 
-VALUES (v_facility_id, 'Magazyn Chłodniczy', 'chiller', -2, 4, true)
-```
-| Kolumna | Wartość | Typ w DB | Status |
-|---------|---------|----------|--------|
-| location_type | 'chiller' | text NOT NULL | ✅ |
-
-#### 4. t_products (linie 39-44) ✅ OK
-```sql
-INSERT INTO t_products (company_id, name, sku, industry_category, unit) 
-VALUES (v_company_id, 'Ćwiartka kurczaka klasy A', 'SU-KURCZAK-001', 'RawMeat', 'kg')
-```
-| Kolumna | Wartości używane | Typ w DB | Status |
-|---------|------------------|----------|--------|
-| industry_category | RawMeat, SemiFinished, FinishedGood, Waste, Spice | text (nie enum) | ✅ |
-
-#### 5. t_recipes (linia 47) ✅ OK
-```sql
-INSERT INTO t_recipes (company_id, name, base_product_id, product_id, target_yield_percent, is_active)
-```
-Wszystkie kolumny poprawne.
-
-#### 6. t_recipe_ingredients (linia 48) ✅ OK
-```sql
-INSERT INTO t_recipe_ingredients (recipe_id, product_id, ratio, amount_per_kg_base, unit)
-```
-Wszystkie kolumny poprawne.
-
-#### 7. t_batches (linie 51-52, 58-59, 61-62, 71-72, 80-81) ✅ OK
-```sql
-INSERT INTO t_batches (..., status, ...) VALUES (..., 'Released', ...)
-UPDATE t_batches SET current_quantity = 0, status = 'Blocked' WHERE ...
-```
-| Kolumna | Wartości używane | Enum batch_status | Status |
-|---------|------------------|-------------------|--------|
-| status | 'Released', 'Blocked' | Released, Blocked, Quarantine | ✅ |
-
-#### 8. t_production_orders (linie 54, 67, 76, 86) ✅ OK
-```sql
-INSERT INTO t_production_orders (..., type, status, ...)
-VALUES (..., 'Decomposition', 'Closed', ...)
-```
-| Kolumna | Wartości używane | Enum | Status |
-|---------|------------------|------|--------|
-| type | Decomposition, Processing, Assembly, Freezing | production_order_type | ✅ |
-| status | Closed | production_order_status (Open, Closed, Cancelled) | ✅ |
-
-#### 9. t_production_inputs (linie 55, 68, 77, 87) ✅ OK
-```sql
-INSERT INTO t_production_inputs (production_order_id, batch_id, product_id, weight)
-```
-Wszystkie kolumny poprawne.
-
-#### 10. t_production_logs (linie 64-65, 74, 83, 88) ✅ OK
-```sql
-INSERT INTO t_production_logs (production_order_id, output_batch_id, product_id, 
-                               weight_net, weight_gross, process_stage, ...)
-```
-| Kolumna | Typ w DB | Status |
-|---------|----------|--------|
-| process_stage | text (nie enum) | ✅ |
-
-#### 11. t_production_kebab_variants (linia 84) ✅ OK
-```sql
-INSERT INTO t_production_kebab_variants (production_log_id, variant_name, variant_weight, quantity, total_weight)
-```
-Wszystkie kolumny poprawne.
-
-#### 12. t_handling_units (linia 91) ✅ OK
-```sql
-INSERT INTO t_handling_units (company_id, facility_id, sscc_number, type, status, 
-                              total_net_weight, items_count, production_date, label_printed)
-VALUES (..., 'Pallet', 'Ready', ...)
-```
-| Kolumna | Wartość | Typ w DB | Status |
-|---------|---------|----------|--------|
-| type | 'Pallet' | text (domyślnie 'Pallet') | ✅ |
-| status | 'Ready' | text (domyślnie 'Open') | ✅ |
-
-#### 13. t_shipments (linia 95) ❌ BŁĄD
-```sql
-INSERT INTO t_shipments (company_id, facility_id, shipment_number, status, 
-                         dispatch_date, driver_name, truck_plates, total_net_weight, pallets_count) 
-VALUES (..., 'shipped', ...)  -- ❌ BŁĘDNE
-```
-| Kolumna | Wartość użyta | Enum shipment_status | Status |
-|---------|---------------|----------------------|--------|
-| status | `'shipped'` | Planning, Loading, **Shipped**, Delivered | ❌ BŁĄD |
-
-**Wymaga: `'Shipped'` (z wielką literą S)**
-
-#### 14. t_shipment_items (linie 97) ✅ OK
-```sql
-INSERT INTO t_shipment_items (shipment_id, handling_unit_id, batch_id, product_id, quantity)
-```
-Wszystkie kolumny poprawne.
+| Akcja | Wartość |
+|-------|---------|
+| configure-auth | `leaked_password_protection: true` |
 
 ---
 
-### Podsumowanie Audytu
+### Zadanie 1.3: Walidacja danych wejściowych w NewDeliveryPage
+**Problem**: Brak walidacji długości i formatu pól tekstowych (np. `supplier_batch_number`).
 
-| # | Tabela | Linie | Status |
-|---|--------|-------|--------|
-| 1 | t_companies | 34 | ✅ OK |
-| 2 | t_facilities | 35 | ✅ OK |
-| 3 | t_storage_locations | 36 | ✅ OK |
-| 4 | t_products | 39-44 | ✅ OK |
-| 5 | t_recipes | 47 | ✅ OK |
-| 6 | t_recipe_ingredients | 48 | ✅ OK |
-| 7 | t_batches | 51-81 | ✅ OK |
-| 8 | t_production_orders | 54-86 | ✅ OK |
-| 9 | t_production_inputs | 55-87 | ✅ OK |
-| 10 | t_production_logs | 64-88 | ✅ OK |
-| 11 | t_production_kebab_variants | 84 | ✅ OK |
-| 12 | t_handling_units | 91 | ✅ OK |
-| 13 | t_shipments | 95 | ❌ BŁĄD - `'shipped'` → `'Shipped'` |
-| 14 | t_shipment_items | 97 | ✅ OK |
+**Rozwiązanie**: Dodać schemat Zod dla formularza dostawy.
+
+| Plik | Zmiana |
+|------|--------|
+| `src/pages/warehouse/NewDeliveryPage.tsx` | Dodać walidację Zod z limitami znaków |
 
 ---
 
-### Rozwiązanie
+## FAZA 2: Persystencja danych
 
-Utworzę migrację SQL, która zmieni **jedynie linię 95** - wartość statusu z `'shipped'` na `'Shipped'`:
+### Zadanie 2.1: Naprawa Terminal Mrożenia - zapis do bazy
+**Problem**: `ShockFreezingTerminalPage` używa tylko `useState`, dane giną przy odświeżeniu.
 
-```sql
--- Linia 95 - BYŁO:
-'shipped'
+**Rozwiązanie**: Dodać mutację `createLog.mutateAsync` przy zatwierdzaniu procesu mrożenia.
 
--- Linia 95 - BĘDZIE:
-'Shipped'
-```
+| Plik | Zmiana |
+|------|--------|
+| `src/pages/production/ShockFreezingTerminalPage.tsx` | Implementacja zapisu do `t_production_logs` |
 
-### Pliki do utworzenia
+---
 
-| Plik | Opis |
-|------|------|
-| `supabase/migrations/[timestamp].sql` | Migracja z poprawioną funkcją simulate_full_production_day() |
+### Zadanie 2.2: Transakcje bazodanowe w NewDeliveryPage
+**Problem**: Tworzenie partii i dokumentów w pętli bez transakcji - ryzyko częściowego zapisu.
 
-### Weryfikacja po wdrożeniu
+**Rozwiązanie**: Opakować operacje w funkcję RPC z transakcją lub użyć `.upsert()` z obsługą błędów.
 
-Po wdrożeniu migracji uruchom symulację ponownie. Powinna zakończyć się sukcesem z pełnym przepływem:
+| Plik | Zmiana |
+|------|--------|
+| `src/pages/warehouse/NewDeliveryPage.tsx` | Refaktoryzacja na atomowe operacje |
 
-```text
-Surowiec (5000kg) 
-  → Rozbiór (3000kg mięso + 1900kg odpady)
-    → Masowanie (3300kg masa)
-      → Składanie (205 słupków)
-        → Mrożenie szokowe
-          → Wysyłka (5 palet, status: Shipped) ✅
-```
+---
+
+### Zadanie 2.3: Transakcje w NewTransferPage
+**Problem**: Identyczny problem jak w NewDeliveryPage.
+
+**Rozwiązanie**: Analogiczna refaktoryzacja.
+
+| Plik | Zmiana |
+|------|--------|
+| `src/pages/warehouse/NewTransferPage.tsx` | Refaktoryzacja na atomowe operacje |
+
+---
+
+## FAZA 3: Walidacja biznesowa
+
+### Zadanie 3.1: Kontrola dat ważności przy wyborze partii
+**Problem**: Można użyć przeterminowanych partii w produkcji.
+
+**Rozwiązanie**: Dodać filtr `expire_at > NOW()` w hookach pobierających partie.
+
+| Plik | Zmiana |
+|------|--------|
+| `src/hooks/useBatches.ts` | Filtr dat ważności w zapytaniach |
+| `src/pages/production/*.tsx` | Wizualne oznaczenie przeterminowanych partii |
+
+---
+
+### Zadanie 3.2: Blokada partii ze statusem Quarantine/Blocked
+**Problem**: Brak pełnej walidacji statusu partii przy selekcji.
+
+**Rozwiązanie**: Konsekwentne filtrowanie `status = 'Released'` we wszystkich terminalach.
+
+| Plik | Zmiana |
+|------|--------|
+| `src/pages/production/WeighingTerminalPage.tsx` | Filtr statusu |
+| `src/pages/production/TumblerTerminalPage.tsx` | Filtr statusu |
+| `src/pages/production/KebabAssemblyTerminalPage.tsx` | Filtr statusu |
+
+---
+
+### Zadanie 3.3: Walidacja wagi w TumblerTerminalPage
+**Problem**: Brak sprawdzenia czy waga > 0 i czy nie przekracza dostępnej ilości.
+
+**Rozwiązanie**: Dodać walidację przed dodaniem partii do tumblera.
+
+| Plik | Zmiana |
+|------|--------|
+| `src/pages/production/TumblerTerminalPage.tsx` | Walidacja `weight > 0 && weight <= batch.current_quantity` |
+
+---
+
+### Zadanie 3.4: Walidacja temperatury w TumblerTerminalPage
+**Problem**: Brak walidacji zakresu temperatury (np. -50°C do +50°C).
+
+**Rozwiązanie**: Dodać ograniczenia min/max dla pola temperatury.
+
+| Plik | Zmiana |
+|------|--------|
+| `src/pages/production/TumblerTerminalPage.tsx` | `min={-50} max={50}` + walidacja |
+
+---
+
+### Zadanie 3.5: Walidacja SSCC - cyfra kontrolna
+**Problem**: `generateSSCC()` nie generuje poprawnej cyfry kontrolnej wg GS1.
+
+**Rozwiązanie**: Implementacja algorytmu Mod10 dla SSCC.
+
+| Plik | Zmiana |
+|------|--------|
+| `src/hooks/useHandlingUnits.ts` | Poprawna funkcja `calculateSSCCCheckDigit()` |
+
+---
+
+### Zadanie 3.6: Walidacja numeru partii dostawcy
+**Problem**: `supplier_batch_number` może zawierać dowolne znaki.
+
+**Rozwiązanie**: Regex dla dozwolonych znaków (alfanumeryczne + myślniki).
+
+| Plik | Zmiana |
+|------|--------|
+| `src/pages/warehouse/NewDeliveryPage.tsx` | Walidacja formatu partii |
+
+---
+
+## FAZA 4: Naprawa logiki biznesowej
+
+### Zadanie 4.1: Hardcoded product_id w KebabAssemblyTerminalPage
+**Problem**: Używany jest `finishedProducts[0]` bez sprawdzenia.
+
+**Rozwiązanie**: Dodać wybór produktu docelowego lub sprawdzenie czy lista nie jest pusta.
+
+| Plik | Zmiana |
+|------|--------|
+| `src/pages/production/KebabAssemblyTerminalPage.tsx` | Bezpieczny dostęp do `finishedProducts` |
+
+---
+
+### Zadanie 4.2: Brak aktualizacji current_quantity po produkcji
+**Problem**: Po zużyciu partii w produkcji `current_quantity` nie jest pomniejszane.
+
+**Rozwiązanie**: Dodać UPDATE batcha po każdym `production_input`.
+
+| Plik | Zmiana |
+|------|--------|
+| `src/hooks/useProductionOrders.ts` | Aktualizacja stanu partii po pobraniu |
+
+---
+
+### Zadanie 4.3: Placeholder w ProductionOrderDetailPage
+**Problem**: Sekcja "Partie wynikowe" pokazuje placeholder zamiast rzeczywistych danych.
+
+**Rozwiązanie**: Pobrać dane z `t_production_logs` gdzie `output_batch_id IS NOT NULL`.
+
+| Plik | Zmiana |
+|------|--------|
+| `src/pages/production/ProductionOrderDetailPage.tsx` | Rzeczywiste dane z logów |
+
+---
+
+### Zadanie 4.4: Brak linku do partii wynikowej w zamkniętych zleceniach
+**Problem**: Po zamknięciu zlecenia nie ma nawigacji do utworzonej partii.
+
+**Rozwiązanie**: Dodać link do `/warehouse/batches?id={batch_id}`.
+
+| Plik | Zmiana |
+|------|--------|
+| `src/pages/production/ProductionOrderDetailPage.tsx` | Nawigacja do partii |
+
+---
+
+### Zadanie 4.5: Brak obsługi błędów w RecipeFormDialog
+**Problem**: Błędy z bazy nie są prezentowane użytkownikowi.
+
+**Rozwiązanie**: Dodać `onError` callback z toast.
+
+| Plik | Zmiana |
+|------|--------|
+| `src/components/recipes/RecipeFormDialog.tsx` | Obsługa błędów mutacji |
+
+---
+
+## FAZA 5: Optymalizacja wydajności
+
+### Zadanie 5.1: Cache dla auth.getUser() w useRolePermissions
+**Problem**: Częste wywołania `supabase.auth.getUser()` przy każdym renderze.
+
+**Rozwiązanie**: Użyć `useAuth()` hook zamiast bezpośredniego wywołania.
+
+| Plik | Zmiana |
+|------|--------|
+| `src/hooks/useRolePermissions.ts` | Zamiana na `useAuth()` hook |
+
+---
+
+### Zadanie 5.2: Brakujący refetch po mutacji w usePackaging
+**Problem**: Po transakcji opakowań lista się nie odświeża.
+
+**Rozwiązanie**: Dodać `queryClient.invalidateQueries()`.
+
+| Plik | Zmiana |
+|------|--------|
+| `src/hooks/usePackaging.ts` | Invalidacja cache po mutacji |
+
+---
+
+### Zadanie 5.3: Brak paginacji w BatchesPage
+**Problem**: Przy dużej liczbie partii (>1000) dane będą obcinane.
+
+**Rozwiązanie**: Dodać paginację lub infinite scroll.
+
+| Plik | Zmiana |
+|------|--------|
+| `src/pages/warehouse/BatchesPage.tsx` | Implementacja paginacji |
+
+---
+
+## FAZA 6: UX i obsługa błędów
+
+### Zadanie 6.1: Brak feedback przy błędzie logowania pracownika
+**Problem**: Nieprawidłowy kod QR nie pokazuje komunikatu błędu.
+
+**Rozwiązanie**: Dodać toast z informacją o błędnym kodzie.
+
+| Plik | Zmiana |
+|------|--------|
+| Wszystkie terminale | Toast przy błędzie weryfikacji QR |
+
+---
+
+### Zadanie 6.2: Brak potwierdzenia przy usuwaniu receptury
+**Problem**: Usunięcie receptury następuje bez potwierdzenia.
+
+**Rozwiązanie**: Dodać dialog `AlertDialog` przed usunięciem.
+
+| Plik | Zmiana |
+|------|--------|
+| `src/pages/settings/RecipesPage.tsx` | Dialog potwierdzenia |
+
+---
+
+### Zadanie 6.3: Brak wizualnego oznaczenia przeterminowanych partii
+**Problem**: Partie po dacie ważności wyglądają jak normalne.
+
+**Rozwiązanie**: Dodać czerwone tło/badge dla przeterminowanych.
+
+| Plik | Zmiana |
+|------|--------|
+| `src/pages/warehouse/BatchesPage.tsx` | Styl dla przeterminowanych |
+
+---
+
+### Zadanie 6.4: Brak stanu pustego w tabelach
+**Problem**: Niektóre tabele nie pokazują komunikatu gdy brak danych.
+
+**Rozwiązanie**: Dodać `<EmptyState />` komponent.
+
+| Plik | Zmiana |
+|------|--------|
+| Wiele plików | Komponent stanu pustego |
+
+---
+
+## FAZA 7: Dokumenty i raporty
+
+### Zadanie 7.1: Brak walidacji danych przed generowaniem CMR
+**Problem**: Można wygenerować CMR bez wymaganych pól (kierowca, tablice).
+
+**Rozwiązanie**: Walidacja przed otwarciem generatora PDF.
+
+| Plik | Zmiana |
+|------|--------|
+| `src/pages/shipping/ShipmentDetailPage.tsx` | Walidacja pól CMR |
+
+---
+
+### Zadanie 7.2: Hardcoded dane firmy w dokumentach PDF
+**Problem**: Adres nadawcy jest zahardcodowany.
+
+**Rozwiązanie**: Pobrać dane z `t_companies` i `t_facilities`.
+
+| Plik | Zmiana |
+|------|--------|
+| `src/components/shipping/documents/CMRDocument.tsx` | Dynamiczne dane firmy |
+| `src/components/shipping/documents/HDIDocument.tsx` | Dynamiczne dane firmy |
+
+---
+
+## FAZA 8: Spójność danych
+
+### Zadanie 8.1: Brak cascade delete dla production_inputs
+**Problem**: Usunięcie zlecenia może osierocić rekordy inputs.
+
+**Rozwiązanie**: Dodać `ON DELETE CASCADE` do foreign key.
+
+| Plik | Zmiana |
+|------|--------|
+| Migracja SQL | ALTER TABLE ADD CONSTRAINT |
+
+---
+
+### Zadanie 8.2: Niespójne nazewnictwo kolumn
+**Problem**: Mieszane `output_batch_id` vs `batch_id` w różnych tabelach.
+
+**Rozwiązanie**: Dokumentacja lub aliasy w hookach (bez zmiany schematu).
+
+| Plik | Zmiana |
+|------|--------|
+| Dokumentacja | Wyjaśnienie konwencji |
+
+---
+
+## Harmonogram realizacji
+
+| Faza | Zadania | Priorytet | Szacowany czas |
+|------|---------|-----------|----------------|
+| 1. Bezpieczeństwo | 1.1 - 1.3 | Krytyczny | 1 godzina |
+| 2. Persystencja | 2.1 - 2.3 | Wysoki | 2 godziny |
+| 3. Walidacja | 3.1 - 3.6 | Wysoki | 3 godziny |
+| 4. Logika | 4.1 - 4.5 | Średni | 3 godziny |
+| 5. Wydajność | 5.1 - 5.3 | Średni | 2 godziny |
+| 6. UX | 6.1 - 6.4 | Niski | 2 godziny |
+| 7. Dokumenty | 7.1 - 7.2 | Niski | 1 godzina |
+| 8. Spójność | 8.1 - 8.2 | Niski | 1 godzina |
+
+**Łączny szacowany czas: ~15 godzin roboczych**
+
+---
+
+## Rekomendowana kolejność
+
+1. **Natychmiast**: Zadania 1.1, 1.2 (bezpieczeństwo krytyczne)
+2. **Dziś**: Zadania 2.1, 3.1, 4.3 (funkcjonalność podstawowa)
+3. **Ten tydzień**: Pozostałe zadania Fazy 2-4
+4. **Następny tydzień**: Fazy 5-8
 
