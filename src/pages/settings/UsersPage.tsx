@@ -108,6 +108,7 @@ export default function UsersPage() {
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteFullName, setInviteFullName] = useState("");
+  const [invitePassword, setInvitePassword] = useState("");
   const [inviteRole, setInviteRole] = useState<string>("viewer");
   const [inviteCompany, setInviteCompany] = useState<string>("");
 
@@ -165,12 +166,16 @@ export default function UsersPage() {
       .trim()
       .min(2, { message: "Imię i nazwisko wymagane (min. 2 znaki)" })
       .max(100, { message: "Imię i nazwisko zbyt długie" }),
+    password: z.string()
+      .min(6, { message: "Hasło musi mieć minimum 6 znaków" })
+      .max(72, { message: "Hasło zbyt długie" }),
   });
 
   const handleInviteUser = () => {
     const validation = inviteSchema.safeParse({
       email: inviteEmail,
       fullName: inviteFullName,
+      password: invitePassword,
     });
 
     if (!validation.success) {
@@ -182,6 +187,7 @@ export default function UsersPage() {
       {
         email: validation.data.email,
         fullName: validation.data.fullName,
+        password: validation.data.password,
         role: inviteRole as any,
         companyId: inviteCompany || undefined,
       },
@@ -190,6 +196,7 @@ export default function UsersPage() {
           setShowInviteDialog(false);
           setInviteEmail("");
           setInviteFullName("");
+          setInvitePassword("");
           setInviteRole("viewer");
           setInviteCompany("");
         },
@@ -503,6 +510,20 @@ export default function UsersPage() {
               />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="invitePassword">Hasło</Label>
+              <Input
+                id="invitePassword"
+                type="password"
+                value={invitePassword}
+                onChange={(e) => setInvitePassword(e.target.value)}
+                placeholder="••••••••"
+                minLength={6}
+              />
+              <p className="text-xs text-muted-foreground">
+                Minimum 6 znaków
+              </p>
+            </div>
+            <div className="space-y-2">
               <Label>Początkowa rola</Label>
               <Select value={inviteRole} onValueChange={setInviteRole}>
                 <SelectTrigger>
@@ -551,7 +572,7 @@ export default function UsersPage() {
             </Button>
             <Button
               onClick={handleInviteUser}
-              disabled={!inviteEmail || !inviteFullName || inviteUser.isPending}
+              disabled={!inviteEmail || !inviteFullName || !invitePassword || inviteUser.isPending}
             >
               <UserPlus className="h-4 w-4 mr-2" />
               Wyślij zaproszenie
