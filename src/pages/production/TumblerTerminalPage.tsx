@@ -110,7 +110,7 @@ export default function TumblerTerminalPage() {
   const processingOrders = orders?.filter(o => o.type === "Processing") || [];
   const { data: employees } = useEmployees();
   const { data: products } = useProducts();
-  const { data: batches } = useBatches();
+  const { data: batches } = useBatches({ availableOnly: true });
   const { data: existingInputs } = useProductionInputs(selectedOrderId || undefined);
   
   // Get company_id from selected order for recipes

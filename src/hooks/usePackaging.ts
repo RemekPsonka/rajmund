@@ -101,9 +101,10 @@ export function useCreatePackagingTransaction() {
       if (error) throw error;
       return result;
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["packaging-balances"] });
       queryClient.invalidateQueries({ queryKey: ["packaging-transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["packaging-balance", variables.contractor_id] });
       toast.success("Transakcja opakowań zapisana");
     },
     onError: (error: Error) => {

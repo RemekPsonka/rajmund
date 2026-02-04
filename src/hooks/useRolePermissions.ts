@@ -1,10 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
 
 export type AppRole = "global_admin" | "facility_admin" | "operator" | "viewer";
 
-export type Resource = 
+export type Resource =
   | "companies"
   | "facilities"
   | "employees"
@@ -113,10 +114,11 @@ export function useUpdateRolePermission() {
 
 // Hook to check current user's permissions
 export function usePermissions() {
+  const { user } = useAuth();
+
   const { data: userRoles } = useQuery({
-    queryKey: ["current-user-roles"],
+    queryKey: ["current-user-roles", user?.id],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
 
       const { data, error } = await supabase
@@ -127,6 +129,7 @@ export function usePermissions() {
       if (error) throw error;
       return data.map(r => r.role as AppRole);
     },
+    enabled: !!user,
   });
 
   const { data: allPermissions } = useRolePermissions();

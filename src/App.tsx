@@ -91,11 +91,14 @@ const App = () => (
             </Route>
           </Route>
           
-          {/* Terminals without layout - full screen */}
-          <Route path="/production/terminal" element={<WeighingTerminalPage />} />
-          <Route path="/production/tumbler" element={<TumblerTerminalPage />} />
-          <Route path="/production/assembly" element={<KebabAssemblyTerminalPage />} />
-          <Route path="/production/freezing" element={<ShockFreezingTerminalPage />} />
+          {/* Terminals without layout - full screen (still protected) */}
+          <Route element={<ProtectedRoute />}>
+            <Route path="/production/terminal" element={<WeighingTerminalPage />} />
+            <Route path="/production/tumbler" element={<TumblerTerminalPage />} />
+            <Route path="/production/assembly" element={<KebabAssemblyTerminalPage />} />
+            <Route path="/production/freezing" element={<ShockFreezingTerminalPage />} />
+          </Route>
+          
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
