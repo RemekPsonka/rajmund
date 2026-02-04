@@ -454,12 +454,69 @@ export default function ProductionOrderDetailPage() {
               <Boxes className="h-5 w-5" />
               Partie wynikowe
             </CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              Partie utworzone przy zamknięciu zlecenia
+            </p>
           </CardHeader>
           <CardContent>
-            <div className="text-center py-8 text-muted-foreground">
-              <Boxes className="mx-auto h-8 w-8 mb-2 opacity-50" />
-              <p>Partie utworzone przy zamknięciu zlecenia</p>
-            </div>
+            {(() => {
+              // Get unique output batches from logs
+              const outputBatches = logs?.filter(log => log.output_batch_id && log.output_batch).map(log => ({
+                id: log.output_batch_id!,
+                batchNumber: log.output_batch?.internal_batch_number || "—",
+                productName: log.product?.name || "—",
+                weight: log.weight_net || 0,
+              })) || [];
+              
+              // Deduplicate by batch ID
+              const uniqueBatches = outputBatches.reduce((acc, batch) => {
+                const existing = acc.find(b => b.id === batch.id);
+                if (existing) {
+                  existing.weight += batch.weight;
+                } else {
+                  acc.push({ ...batch });
+                }
+                return acc;
+              }, [] as typeof outputBatches);
+
+              if (uniqueBatches.length === 0) {
+                return (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Boxes className="mx-auto h-8 w-8 mb-2 opacity-50" />
+                    <p>Brak partii wynikowych</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-2">
+                  {uniqueBatches.map((batch) => (
+                    <div
+                      key={batch.id}
+                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 cursor-pointer"
+                      onClick={() => navigate(`/warehouse/batches?id=${batch.id}`)}
+                    >
+                      <div>
+                        <div className="font-mono font-medium text-sm">
+                          {batch.batchNumber}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {batch.productName}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-mono font-medium">
+                          {batch.weight.toFixed(2)} kg
+                        </div>
+                        <Badge variant="secondary" className="text-xs">
+                          Released
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
       )}

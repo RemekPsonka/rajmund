@@ -173,31 +173,52 @@ export default function TumblerTerminalPage() {
       b => b.internal_batch_number.toLowerCase() === batchScanCode.toLowerCase()
     );
 
-    if (batch) {
-      const product = products?.find(p => p.id === batch.product_id);
-      
-      // Check if already added
-      if (inputItems.some(item => item.batchId === batch.id)) {
-        toast.error("Ta partia jest już dodana");
+    if (!batch) {
+      toast.error("Nie znaleziono partii");
+      setBatchScanCode("");
+      return;
+    }
+
+    // Validate batch has available quantity
+    if (batch.current_quantity <= 0) {
+      toast.error("Partia nie ma dostępnej ilości");
+      setBatchScanCode("");
+      return;
+    }
+
+    // Validate batch is not expired
+    if (batch.expiration_date) {
+      const expiryDate = new Date(batch.expiration_date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (expiryDate < today) {
+        toast.error("Partia jest przeterminowana!");
         setBatchScanCode("");
         return;
       }
-
-      setInputItems(prev => [...prev, {
-        id: crypto.randomUUID(),
-        batchNumber: batch.internal_batch_number,
-        productName: product?.name || "Nieznany",
-        weight: batch.current_quantity,
-        batchId: batch.id,
-        productId: batch.product_id,
-        direction: inputDirection,
-      }]);
-      
-      toast.success(`Dodano: ${batch.internal_batch_number}`);
-      setBatchScanCode("");
-    } else {
-      toast.error("Nie znaleziono partii");
     }
+
+    const product = products?.find(p => p.id === batch.product_id);
+    
+    // Check if already added
+    if (inputItems.some(item => item.batchId === batch.id)) {
+      toast.error("Ta partia jest już dodana");
+      setBatchScanCode("");
+      return;
+    }
+
+    setInputItems(prev => [...prev, {
+      id: crypto.randomUUID(),
+      batchNumber: batch.internal_batch_number,
+      productName: product?.name || "Nieznany",
+      weight: batch.current_quantity,
+      batchId: batch.id,
+      productId: batch.product_id,
+      direction: inputDirection,
+    }]);
+    
+    toast.success(`Dodano: ${batch.internal_batch_number}`);
+    setBatchScanCode("");
   }, [batchScanCode, batches, products, inputItems, inputDirection]);
 
   // Remove input item
