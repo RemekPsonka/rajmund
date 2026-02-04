@@ -171,21 +171,19 @@ export function useInviteUser() {
     mutationFn: async ({
       email,
       fullName,
+      password,
       role,
       companyId,
     }: {
       email: string;
       fullName: string;
+      password: string;
       role: "global_admin" | "facility_admin" | "operator" | "viewer";
       companyId?: string;
     }) => {
-      // Create user via admin API - this requires edge function
-      // For now, we'll use signUp which works for self-registration
-      const tempPassword = Math.random().toString(36).slice(-12) + "Aa1!";
-      
       const { data, error } = await supabase.auth.signUp({
         email,
-        password: tempPassword,
+        password,
         options: {
           emailRedirectTo: window.location.origin,
           data: {
@@ -213,7 +211,7 @@ export function useInviteUser() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
-      toast.success("Zaproszenie wysłane na email użytkownika");
+      toast.success("Użytkownik utworzony pomyślnie");
     },
     onError: (error) => {
       toast.error("Błąd tworzenia użytkownika: " + error.message);
