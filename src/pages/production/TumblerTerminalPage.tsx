@@ -128,11 +128,12 @@ export default function TumblerTerminalPage() {
   // Selected recipe details
   const selectedRecipe = recipes?.find(r => r.id === selectedRecipeId);
   
-  // Total input weight
-  const totalInputWeight = useMemo(() => 
-    inputItems.reduce((sum, item) => sum + item.weight, 0),
-    [inputItems]
-  );
+  // Total input weight (local + existing from DB)
+  const totalInputWeight = useMemo(() => {
+    const localWeight = inputItems.reduce((sum, item) => sum + item.weight, 0);
+    const existingWeight = existingInputs?.reduce((sum, inp) => sum + Number(inp.weight), 0) || 0;
+    return localWeight + existingWeight;
+  }, [inputItems, existingInputs]);
   
   // Net weight
   const weightNet = Math.max(0, weightGross - weightTare);
@@ -607,7 +608,7 @@ export default function TumblerTerminalPage() {
                   <p className="text-muted-foreground">kg surowca</p>
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  <p>{inputItems.length || existingInputs?.length || 0} pozycji</p>
+                  <p>{inputItems.length + (existingInputs?.length || 0)} pozycji</p>
                 </div>
               </CardContent>
             </Card>
