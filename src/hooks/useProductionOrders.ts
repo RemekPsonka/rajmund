@@ -372,3 +372,60 @@ export const ORDER_TYPE_LABELS: Record<ProductionOrderType, string> = {
   Assembly: "Składanie Kebaba",
   Freezing: "Mrożenie",
 };
+
+// Fetch output batches from closed Processing orders (for Assembly terminal)
+export interface ProcessingOutputBatch {
+  id: string;
+  output_batch_id: string;
+  production_order: {
+    id: string;
+    order_number: string;
+    type: string;
+    status: string;
+    facility_id: string;
+    company_id: string;
+  };
+  output_batch: {
+    id: string;
+    internal_batch_number: string;
+    current_quantity: number;
+    status: string;
+    product: {
+      id: string;
+      name: string;
+    };
+  };
+}
+
+export function useProcessingOutputBatches() {
+  return useQuery({
+    queryKey: ["processing-output-batches"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("t_production_logs")
+        .select(`
+          id,
+          output_batch_id,
+          production_order:t_production_orders!inner(
+            id, order_number, type, status, facility_id, company_id
+          ),
+          output_batch:t_batches!t_production_logs_output_batch_id_fkey(
+            id, internal_batch_number, current_quantity, status,
+            product:t_products(id, name)
+          )
+        `)
+        .not("output_batch_id", "is", null)
+        .eq("production_order.type", "Processing")
+        .eq("production_order.status", "Closed");
+
+      if (error) throw error;
+      
+      // Filter to only include batches with available quantity
+      const validBatches = (data || []).filter(
+        (item: any) => item.output_batch && item.output_batch.current_quantity > 0 && item.output_batch.status === "Released"
+      );
+      
+      return validBatches as ProcessingOutputBatch[];
+    },
+  });
+}
