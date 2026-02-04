@@ -219,12 +219,13 @@ export function useCreateProductionOrder() {
   });
 }
 
-// Add input to order
+// Add input to order and update batch quantity
 export function useCreateProductionInput() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (formData: ProductionInputFormData) => {
+      // 1. Insert the production input
       const { data, error } = await supabase
         .from("t_production_inputs")
         .insert([formData])
@@ -232,10 +233,27 @@ export function useCreateProductionInput() {
         .single();
 
       if (error) throw error;
+
+      // 2. Update the batch's current_quantity (decrement by consumed weight)
+      const { data: batch } = await supabase
+        .from("t_batches")
+        .select("current_quantity")
+        .eq("id", formData.batch_id)
+        .single();
+      
+      if (batch) {
+        const newQuantity = Math.max(0, batch.current_quantity - formData.weight);
+        await supabase
+          .from("t_batches")
+          .update({ current_quantity: newQuantity })
+          .eq("id", formData.batch_id);
+      }
+
       return data;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["production-inputs", variables.production_order_id] });
+      queryClient.invalidateQueries({ queryKey: ["batches"] });
       toast.success("Wsad został dodany");
     },
     onError: (error: Error) => {
