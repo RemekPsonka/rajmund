@@ -16,6 +16,8 @@ export interface ProductionOrder {
   production_date: string;
   supervisor_id: string | null;
   notes: string | null;
+  recipe_id: string | null;
+  machine_id: string | null;
   created_at: string;
   updated_at: string;
   // Joined
@@ -281,6 +283,32 @@ export function useUpdateProductionOrderStatus() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["production-orders"] });
       toast.success("Status zlecenia został zmieniony");
+    },
+    onError: (error: Error) => {
+      toast.error(`Błąd: ${error.message}`);
+    },
+  });
+}
+
+// Generic update production order (for recipe_id, machine_id, etc.)
+export function useUpdateProductionOrder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; recipe_id?: string; machine_id?: string }) => {
+      const { data: result, error } = await supabase
+        .from("t_production_orders")
+        .update(data)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["production-orders"] });
+      toast.success("Zlecenie zostało zaktualizowane");
     },
     onError: (error: Error) => {
       toast.error(`Błąd: ${error.message}`);

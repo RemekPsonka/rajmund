@@ -12,6 +12,8 @@ import {
   Cog,
   Snowflake,
   ArrowRight,
+  Play,
+  ChefHat,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -43,7 +45,9 @@ import {
   useCreateProductionInput,
   useCreateProductionLog,
   useProductionInputs,
+  useUpdateProductionOrder,
 } from "@/hooks/useProductionOrders";
+import { useRecipes, useRecipeIngredients } from "@/hooks/useRecipes";
 import { PROCESSING_DIRECTIONS, type ProcessingDirection } from "@/hooks/useStorageLocations";
 import { cn } from "@/lib/utils";
 
@@ -88,6 +92,9 @@ export default function TumblerTerminalPage() {
   // State - Input direction
   const [inputDirection, setInputDirection] = useState<ProcessingDirection>("SWIEZE");
   
+  // State - Processing (Start procesu)
+  const [selectedRecipeId, setSelectedRecipeId] = useState("");
+  
   // State - Output (Wyjście)
   const [selectedProductId, setSelectedProductId] = useState("");
   const [outputDirection, setOutputDirection] = useState<string>("MROZNIA");
@@ -95,8 +102,8 @@ export default function TumblerTerminalPage() {
   const [weightTare, setWeightTare] = useState(TARE_DEFAULT);
   const [isScaleReading, setIsScaleReading] = useState(false);
   
-  // State - Step
-  const [step, setStep] = useState<"input" | "output">("input");
+  // State - Step (3 steps now)
+  const [step, setStep] = useState<"input" | "processing" | "output">("input");
 
   // Queries
   const { data: orders } = useProductionOrders("Open");
@@ -106,11 +113,20 @@ export default function TumblerTerminalPage() {
   const { data: batches } = useBatches();
   const { data: existingInputs } = useProductionInputs(selectedOrderId || undefined);
   
+  // Get company_id from selected order for recipes
+  const selectedOrder = processingOrders.find(o => o.id === selectedOrderId);
+  const { data: recipes } = useRecipes(selectedOrder?.company_id);
+  const { data: recipeIngredients } = useRecipeIngredients(selectedRecipeId || undefined);
+  
   const createInput = useCreateProductionInput();
   const createLog = useCreateProductionLog();
+  const updateOrder = useUpdateProductionOrder();
 
   // Finished products for output
   const finishedProducts = products?.filter(p => !p.is_raw_material) || [];
+  
+  // Selected recipe details
+  const selectedRecipe = recipes?.find(r => r.id === selectedRecipeId);
   
   // Total input weight
   const totalInputWeight = useMemo(() => 
@@ -181,7 +197,7 @@ export default function TumblerTerminalPage() {
     } else {
       toast.error("Nie znaleziono partii");
     }
-  }, [batchScanCode, batches, products, inputItems]);
+  }, [batchScanCode, batches, products, inputItems, inputDirection]);
 
   // Remove input item
   const handleRemoveItem = (id: string) => {
@@ -200,7 +216,7 @@ export default function TumblerTerminalPage() {
     }, 800);
   };
 
-  // Save inputs (RW documents)
+  // Save inputs (RW documents) - move to processing step
   const handleSaveInputs = async () => {
     if (!selectedOrderId || inputItems.length === 0) {
       toast.error("Dodaj co najmniej jeden wsad");
@@ -219,6 +235,27 @@ export default function TumblerTerminalPage() {
       }
       
       toast.success("Zapisano wsad do zlecenia");
+      setStep("processing");
+    } catch {
+      // Error handled by hook
+    }
+  };
+
+  // Start process - save recipe and machine to order
+  const handleStartProcess = async () => {
+    if (!selectedOrderId || !selectedRecipeId) {
+      toast.error("Wybierz recepturę");
+      return;
+    }
+
+    try {
+      await updateOrder.mutateAsync({
+        id: selectedOrderId,
+        recipe_id: selectedRecipeId,
+        machine_id: selectedMachine || null,
+      });
+      
+      toast.success("Proces rozpoczęty - przejdź do ważenia wyjścia");
       setStep("output");
     } catch {
       // Error handled by hook
@@ -259,11 +296,26 @@ export default function TumblerTerminalPage() {
     setInputItems([]);
     setWeightGross(0);
     setSelectedProductId("");
+    setSelectedRecipeId("");
     setStep("input");
     setBatchScanCode("");
   };
 
-  const selectedOrder = processingOrders.find(o => o.id === selectedOrderId);
+  // Calculate theoretical and real yield for selected recipe
+  const theoreticalYield = useMemo(() => {
+    if (!selectedRecipe) return null;
+    
+    const ingredientsTotal = recipeIngredients?.reduce((sum, ing) => sum + (ing.amount_per_kg_base || ing.ratio), 0) || 0;
+    const theoretical = (1 + ingredientsTotal) * 100;
+    const evaporation = selectedRecipe.evaporation_percent || 0;
+    const real = theoretical * (1 - evaporation / 100);
+    
+    return {
+      theoretical: theoretical.toFixed(1),
+      evaporation,
+      real: real.toFixed(1),
+    };
+  }, [selectedRecipe, recipeIngredients]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -347,7 +399,7 @@ export default function TumblerTerminalPage() {
         </div>
       </div>
 
-      {/* Step Indicator */}
+      {/* Step Indicator - 3 steps now */}
       <div className="px-4 py-2 border-b bg-card">
         <div className="flex items-center gap-4">
           <Button
@@ -359,12 +411,21 @@ export default function TumblerTerminalPage() {
           </Button>
           <ArrowRight className="h-4 w-4 text-muted-foreground" />
           <Button
+            variant={step === "processing" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setStep("processing")}
+            disabled={inputItems.length === 0 && !existingInputs?.length}
+          >
+            2. Start procesu
+          </Button>
+          <ArrowRight className="h-4 w-4 text-muted-foreground" />
+          <Button
             variant={step === "output" ? "default" : "outline"}
             size="sm"
             onClick={() => setStep("output")}
-            disabled={inputItems.length === 0}
+            disabled={!selectedRecipeId && !selectedOrder?.recipe_id}
           >
-            2. Wyjście (Output)
+            3. Wyjście (Output)
           </Button>
         </div>
       </div>
@@ -528,8 +589,128 @@ export default function TumblerTerminalPage() {
               </CardContent>
             </Card>
           </div>
+        ) : step === "processing" ? (
+          /* Step 2: Processing - Recipe Selection */
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl mx-auto">
+            {/* Input Summary */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Podsumowanie wsadu</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-4">
+                  <p className="text-4xl font-bold font-mono">{totalInputWeight.toFixed(1)}</p>
+                  <p className="text-muted-foreground">kg surowca</p>
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  <p>{inputItems.length || existingInputs?.length || 0} pozycji</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Recipe Selection */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ChefHat className="h-5 w-5" />
+                  Wybór receptury
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Select value={selectedRecipeId} onValueChange={setSelectedRecipeId}>
+                  <SelectTrigger className="h-12">
+                    <SelectValue placeholder="Wybierz recepturę..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {!recipes || recipes.length === 0 ? (
+                      <div className="p-4 text-center text-muted-foreground text-sm">
+                        <AlertCircle className="h-5 w-5 mx-auto mb-2 opacity-50" />
+                        Brak dostępnych receptur.
+                        <br />
+                        Utwórz receptury w Ustawienia → Receptury.
+                      </div>
+                    ) : (
+                      recipes.map((recipe) => (
+                        <SelectItem key={recipe.id} value={recipe.id}>
+                          {recipe.name}
+                          {recipe.product?.name && ` → ${recipe.product.name}`}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+
+                {/* Recipe Details */}
+                {selectedRecipe && (
+                  <div className="space-y-3 pt-2">
+                    {/* Ingredients */}
+                    {recipeIngredients && recipeIngredients.length > 0 && (
+                      <div className="bg-muted/50 rounded-lg p-3">
+                        <p className="text-sm font-medium mb-2">Składniki receptury:</p>
+                        <ul className="text-sm space-y-1">
+                          {recipeIngredients.map((ing) => (
+                            <li key={ing.id} className="flex justify-between">
+                              <span>• {ing.product?.name || "Składnik"}</span>
+                              <span className="font-mono text-muted-foreground">
+                                {(ing.amount_per_kg_base || ing.ratio).toFixed(3)} {ing.unit || "kg/kg"}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Yield info */}
+                    {theoreticalYield && (
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="bg-muted/30 rounded p-2">
+                          <p className="text-xs text-muted-foreground">Teoretyczny uzysk</p>
+                          <p className="font-bold">{theoreticalYield.theoretical}%</p>
+                        </div>
+                        <div className="bg-muted/30 rounded p-2">
+                          <p className="text-xs text-muted-foreground">Parowanie</p>
+                          <p className="font-bold">{theoreticalYield.evaporation}%</p>
+                        </div>
+                        <div className="bg-success/10 rounded p-2 border border-success/30">
+                          <p className="text-xs text-muted-foreground">Realny uzysk</p>
+                          <p className="font-bold text-success">{theoreticalYield.real}%</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Process instructions */}
+                    {selectedRecipe.process_instructions && (
+                      <div className="text-sm text-muted-foreground border-t pt-3">
+                        <p className="font-medium mb-1">Instrukcje procesu:</p>
+                        <p>{selectedRecipe.process_instructions}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Start Process Button - Full Width */}
+            <div className="lg:col-span-2">
+              <Button
+                className="w-full h-16 text-xl font-bold"
+                size="lg"
+                disabled={!selectedRecipeId || updateOrder.isPending}
+                onClick={handleStartProcess}
+              >
+                {updateOrder.isPending ? (
+                  "ZAPISYWANIE..."
+                ) : (
+                  <>
+                    <Play className="h-6 w-6 mr-3" />
+                    START PROCESU
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         ) : (
-          /* Step 2: Output (Wyjście) */
+          /* Step 3: Output (Wyjście) */
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Summary */}
             <Card className="lg:col-span-1">
@@ -547,6 +728,16 @@ export default function TumblerTerminalPage() {
                     <p className="mt-2">Zarejestrowane wsady: {existingInputs.length}</p>
                   )}
                 </div>
+                {/* Show selected recipe */}
+                {(selectedRecipe || selectedOrder?.recipe_id) && (
+                  <div className="mt-4 pt-4 border-t">
+                    <p className="text-sm text-muted-foreground">Receptura:</p>
+                    <Badge variant="secondary" className="mt-1">
+                      <ChefHat className="h-3 w-3 mr-1" />
+                      {selectedRecipe?.name || "Przypisana"}
+                    </Badge>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
