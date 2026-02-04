@@ -46,11 +46,11 @@ export interface BatchFormData {
   status?: BatchStatus;
 }
 
-export function useBatches() {
+export function useBatches(options?: { availableOnly?: boolean }) {
   return useQuery({
-    queryKey: ["batches"],
+    queryKey: ["batches", options?.availableOnly],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("t_batches")
         .select(`
           *,
@@ -59,6 +59,17 @@ export function useBatches() {
           location:t_storage_locations(name, location_type)
         `)
         .order("created_at", { ascending: false });
+
+      // Filter to only available batches (Released status, has quantity, not expired)
+      if (options?.availableOnly) {
+        const today = new Date().toISOString().split('T')[0];
+        query = query
+          .eq("status", "Released")
+          .gt("current_quantity", 0)
+          .or(`expiration_date.is.null,expiration_date.gte.${today}`);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       return data as Batch[];

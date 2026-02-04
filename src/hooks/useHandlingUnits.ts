@@ -31,7 +31,19 @@ export interface HandlingUnitFormData {
   type?: HandlingUnitType;
 }
 
-// Generate SSCC number
+// Calculate GS1 Mod10 check digit for SSCC
+function calculateSSCCCheckDigit(sscc17: string): string {
+  let sum = 0;
+  for (let i = 0; i < 17; i++) {
+    const digit = parseInt(sscc17.charAt(i), 10);
+    // Odd positions (1, 3, 5...) multiply by 3, even by 1 (GS1 standard)
+    sum += digit * (i % 2 === 0 ? 3 : 1);
+  }
+  const checkDigit = (10 - (sum % 10)) % 10;
+  return checkDigit.toString();
+}
+
+// Generate SSCC number with valid GS1 check digit
 export function generateSSCC(): string {
   const date = new Date();
   const year = date.getFullYear().toString().slice(-2);
@@ -39,8 +51,13 @@ export function generateSSCC(): string {
   const day = date.getDate().toString().padStart(2, "0");
   const hour = date.getHours().toString().padStart(2, "0");
   const min = date.getMinutes().toString().padStart(2, "0");
-  const random = Math.floor(Math.random() * 10000).toString().padStart(4, "0");
-  return `00${year}${month}${day}${hour}${min}${random}`;
+  const random = Math.floor(Math.random() * 1000).toString().padStart(3, "0");
+  
+  // Build 17-digit base (extension digit + GS1 company prefix + serial)
+  const sscc17 = `0${year}${month}${day}${hour}${min}${random}`;
+  const checkDigit = calculateSSCCCheckDigit(sscc17);
+  
+  return sscc17 + checkDigit;
 }
 
 // Fetch handling units

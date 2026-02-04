@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Snowflake, User, Scan, Play, Square, Clock, ThermometerSnowflake } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,12 +24,12 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 
-import { useProductionOrders } from "@/hooks/useProductionOrders";
+import { useProductionOrders, useCreateProductionLog, useUpdateProductionLog, useFreezingLogs, generateOrderNumber, useCreateProductionOrder } from "@/hooks/useProductionOrders";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useCompanies } from "@/hooks/useCompanies";
 import { useFacilities } from "@/hooks/useFacilities";
-import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
+import { useBatches } from "@/hooks/useBatches";
+import { useProducts } from "@/hooks/useProducts";
 
 const FREEZING_CHAMBERS = [
   { id: "chamber-1", name: "Komora 1 (-35°C)" },
@@ -44,11 +44,11 @@ interface FreezingItem {
   weight: number;
   startedAt: Date;
   status: "freezing" | "completed";
+  dbLogId?: string; // ID from database
 }
 
 export default function ShockFreezingTerminalPage() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
 
   // Context
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
@@ -60,7 +60,7 @@ export default function ShockFreezingTerminalPage() {
   // Scanning
   const [scanCode, setScanCode] = useState("");
   
-  // Items in freezing
+  // Items in freezing (local state synced with DB)
   const [freezingItems, setFreezingItems] = useState<FreezingItem[]>([]);
 
   // Data
@@ -68,14 +68,46 @@ export default function ShockFreezingTerminalPage() {
   const { data: facilities } = useFacilities();
   const { data: employees } = useEmployees();
   const { data: orders } = useProductionOrders("Open");
+  const { data: batches } = useBatches({ availableOnly: true });
+  const { data: products } = useProducts();
+  const { data: existingFreezingLogs, refetch: refetchFreezingLogs } = useFreezingLogs(selectedFacilityId);
+  
+  // Mutations
+  const createLog = useCreateProductionLog();
+  const updateLog = useUpdateProductionLog();
+  const createOrder = useCreateProductionOrder();
 
-  // Filter facilities
+  // Load existing freezing logs from DB when facility changes
+  useEffect(() => {
+    if (existingFreezingLogs && existingFreezingLogs.length > 0) {
+      const dbItems: FreezingItem[] = existingFreezingLogs
+        .filter((log: any) => !log.freezing_completed_at) // Only active freezing
+        .map((log: any) => ({
+          id: log.id,
+          batchNumber: log.source_batch?.internal_batch_number || "N/A",
+          productName: log.product?.name || "Nieznany",
+          weight: log.weight_net || log.weight_gross,
+          startedAt: new Date(log.freezing_started_at || log.created_at),
+          status: "freezing" as const,
+          dbLogId: log.id,
+        }));
+      
+      // Merge with local items (avoid duplicates)
+      setFreezingItems(prev => {
+        const existingIds = new Set(prev.map(i => i.dbLogId).filter(Boolean));
+        const newDbItems = dbItems.filter(i => !existingIds.has(i.dbLogId));
+        return [...prev.filter(i => !i.dbLogId), ...newDbItems, ...dbItems.filter(i => existingIds.has(i.dbLogId))];
+      });
+    }
+  }, [existingFreezingLogs]);
+
+  // Filter facilities by selected company
   const filteredFacilities = useMemo(() => 
     facilities?.filter(f => f.company_id === selectedCompanyId) || [],
     [facilities, selectedCompanyId]
   );
 
-  // Filter freezing orders
+  // Filter freezing orders by selected facility
   const freezingOrders = useMemo(() => 
     orders?.filter(o => o.type === "Freezing" && o.facility_id === selectedFacilityId) || [],
     [orders, selectedFacilityId]
@@ -110,38 +142,99 @@ export default function ShockFreezingTerminalPage() {
       toast.error("Zaloguj pracownika");
       return;
     }
+    if (!selectedCompanyId || !selectedFacilityId) {
+      toast.error("Wybierz spółkę i zakład");
+      return;
+    }
 
-    // Simulate finding a production log by batch number
-    // In real implementation, you'd query for t_production_logs with matching batch
-    const newItem: FreezingItem = {
-      id: crypto.randomUUID(),
-      batchNumber: scanCode,
-      productName: `Kebab (${scanCode})`,
-      weight: Math.random() * 20 + 5,
-      startedAt: new Date(),
-      status: "freezing",
-    };
+    // Find batch by scanned code
+    const batch = batches?.find(b => b.internal_batch_number.toLowerCase() === scanCode.toLowerCase());
+    if (!batch) {
+      toast.error("Nie znaleziono partii");
+      return;
+    }
 
-    setFreezingItems(prev => [...prev, newItem]);
-    setScanCode("");
-    
-    toast.success(`Rozpoczęto mrożenie: ${scanCode}`);
+    const product = products?.find(p => p.id === batch.product_id);
+
+    try {
+      // Find or create a Freezing order for today
+      let freezingOrder = freezingOrders.find(o => o.status === "Open");
+      
+      if (!freezingOrder) {
+        // Create new freezing order
+        const orderNumber = generateOrderNumber("Freezing");
+        const result = await createOrder.mutateAsync({
+          company_id: selectedCompanyId,
+          facility_id: selectedFacilityId,
+          order_number: orderNumber,
+          type: "Freezing",
+          notes: `Mrożenie szokowe - ${selectedChamber}`,
+        });
+        freezingOrder = result;
+      }
+
+      // Create production log with freezing data
+      const now = new Date().toISOString();
+      const logResult = await createLog.mutateAsync({
+        production_order_id: freezingOrder.id,
+        employee_id: verifiedEmployee.id,
+        product_id: batch.product_id,
+        source_batch_id: batch.id,
+        weight_gross: batch.current_quantity,
+        process_stage: "ShockFreezing",
+        freezing_started_at: now,
+      });
+
+      // Add to local state
+      const newItem: FreezingItem = {
+        id: logResult.id,
+        batchNumber: batch.internal_batch_number,
+        productName: product?.name || "Nieznany",
+        weight: batch.current_quantity,
+        startedAt: new Date(),
+        status: "freezing",
+        dbLogId: logResult.id,
+      };
+
+      setFreezingItems(prev => [...prev, newItem]);
+      setScanCode("");
+      
+      toast.success(`Rozpoczęto mrożenie: ${batch.internal_batch_number}`);
+    } catch (error) {
+      console.error("Freezing start error:", error);
+    }
   };
 
   // Complete freezing for an item
   const handleCompleteFreezing = async (itemId: string) => {
-    setFreezingItems(prev => 
-      prev.map(item => 
-        item.id === itemId 
-          ? { ...item, status: "completed" as const }
-          : item
-      )
-    );
-
     const item = freezingItems.find(i => i.id === itemId);
-    if (item) {
-      const duration = Math.round((Date.now() - item.startedAt.getTime()) / 60000);
+    if (!item) return;
+
+    const duration = Math.round((Date.now() - item.startedAt.getTime()) / 60000);
+    const now = new Date().toISOString();
+
+    try {
+      if (item.dbLogId) {
+        // Update in database
+        await updateLog.mutateAsync({
+          id: item.dbLogId,
+          freezing_completed_at: now,
+          freezing_duration_minutes: duration,
+        });
+      }
+
+      setFreezingItems(prev => 
+        prev.map(i => 
+          i.id === itemId 
+            ? { ...i, status: "completed" as const }
+            : i
+        )
+      );
+
       toast.success(`Zakończono mrożenie: ${item.batchNumber} (${duration} min)`);
+      refetchFreezingLogs();
+    } catch (error) {
+      console.error("Freezing complete error:", error);
     }
   };
 

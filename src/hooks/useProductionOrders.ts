@@ -90,6 +90,10 @@ export interface ProductionLogFormData {
   packaging_type?: string;
   packaging_count?: number;
   scale_device_id?: string;
+  process_stage?: string;
+  freezing_started_at?: string;
+  freezing_completed_at?: string;
+  freezing_duration_minutes?: number;
 }
 
 // Fetch production orders
@@ -257,9 +261,71 @@ export function useCreateProductionLog() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["production-logs", variables.production_order_id] });
+      queryClient.invalidateQueries({ queryKey: ["freezing-logs"] });
     },
     onError: (error: Error) => {
       toast.error(`Błąd: ${error.message}`);
+    },
+  });
+}
+
+// Update production log (e.g. complete freezing)
+export function useUpdateProductionLog() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { 
+      id: string; 
+      freezing_completed_at?: string;
+      freezing_duration_minutes?: number;
+    }) => {
+      const { data: result, error } = await supabase
+        .from("t_production_logs")
+        .update(data)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["production-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["freezing-logs"] });
+      toast.success("Log produkcji zaktualizowany");
+    },
+    onError: (error: Error) => {
+      toast.error(`Błąd: ${error.message}`);
+    },
+  });
+}
+
+// Fetch active freezing logs (process_stage = 'ShockFreezing' and not completed)
+export function useFreezingLogs(facilityId?: string) {
+  return useQuery({
+    queryKey: ["freezing-logs", facilityId],
+    queryFn: async () => {
+      let query = supabase
+        .from("t_production_logs")
+        .select(`
+          *,
+          product:t_products(name, sku, unit),
+          production_order:t_production_orders(facility_id, order_number),
+          source_batch:t_batches!t_production_logs_source_batch_id_fkey(internal_batch_number)
+        `)
+        .eq("process_stage", "ShockFreezing")
+        .order("created_at", { ascending: false });
+
+      const { data, error } = await query;
+      if (error) throw error;
+      
+      // Filter by facility if provided
+      let result = data || [];
+      if (facilityId) {
+        result = result.filter((log: any) => log.production_order?.facility_id === facilityId);
+      }
+      
+      return result;
     },
   });
 }
