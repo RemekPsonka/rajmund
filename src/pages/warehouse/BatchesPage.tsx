@@ -267,13 +267,20 @@ export default function BatchesPage() {
                   const expired = isExpired(batch.expiration_date);
                   const expiringSoon = isExpiringSoon(batch.expiration_date);
 
-                  return (
-                    <TableRow key={batch.id} className={expired ? "bg-destructive/5" : expiringSoon ? "bg-warning/5" : ""}>
-                      <TableCell>
-                        <code className="text-sm font-medium bg-muted px-2 py-1 rounded">
-                          {batch.internal_batch_number}
-                        </code>
-                      </TableCell>
+                    return (
+                      <TableRow key={batch.id} className={expired ? "bg-destructive/10 border-l-4 border-l-destructive" : expiringSoon ? "bg-warning/10 border-l-4 border-l-warning" : ""}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <code className="text-sm font-medium bg-muted px-2 py-1 rounded">
+                              {batch.internal_batch_number}
+                            </code>
+                            {expired && (
+                              <Badge variant="destructive" className="text-xs">
+                                PRZETERMINOWANA
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <div>
                             <p className="font-medium">{batch.product?.name}</p>

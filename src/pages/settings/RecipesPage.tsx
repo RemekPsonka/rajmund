@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Plus, Pencil, Trash2, FlaskConical } from "lucide-react";
 import { useCompanies } from "@/hooks/useCompanies";
 import { useProducts } from "@/hooks/useProducts";
@@ -171,11 +172,23 @@ export default function RecipesPage() {
               <Skeleton className="h-12 w-full" />
             </div>
           ) : !recipes?.length ? (
-            <p className="text-muted-foreground text-center py-8">
-              {selectedCompanyId
-                ? "Brak receptur. Dodaj pierwszą recepturę."
-                : "Wybierz spółkę, aby zobaczyć receptury."}
-            </p>
+            <EmptyState
+              icon={FlaskConical}
+              title={selectedCompanyId ? "Brak receptur" : "Wybierz spółkę"}
+              description={
+                selectedCompanyId
+                  ? "Dodaj pierwszą recepturę, aby rozpocząć."
+                  : "Wybierz spółkę z listy powyżej, aby zobaczyć receptury."
+              }
+              action={
+                selectedCompanyId && (
+                  <Button onClick={handleOpenCreate}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Dodaj recepturę
+                  </Button>
+                )
+              }
+            />
           ) : (
             <Table>
               <TableHeader>
