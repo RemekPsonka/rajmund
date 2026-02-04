@@ -60,14 +60,22 @@ const step1Schema = z.object({
 
 type Step1FormValues = z.infer<typeof step1Schema>;
 
-// Step 2: Item form
+// Step 2: Item form with validation
+const supplierBatchRegex = /^[a-zA-Z0-9\-_.\/]+$/;
+
 const itemSchema = z.object({
   product_id: z.string().min(1, "Wybierz produkt"),
   quantity: z.preprocess(
     (val) => (val === "" || val === undefined ? undefined : Number(val)),
     z.number().min(0.01, "Podaj ilość")
   ),
-  supplier_batch_number: z.string().optional(),
+  supplier_batch_number: z.string()
+    .max(50, "Numer partii max 50 znaków")
+    .refine(
+      (val) => !val || supplierBatchRegex.test(val),
+      "Dozwolone: litery, cyfry, myślniki, podkreślenia, kropki, ukośniki"
+    )
+    .optional(),
   production_date: z.string().optional(),
   expiration_date: z.string().optional(),
   location_id: z.string().optional(),

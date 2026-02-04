@@ -194,25 +194,30 @@ export function RecipeFormDialog({
       return;
     }
 
-    await onSubmit(
-      {
-        company_id: companyId,
-        name: name.trim(),
-        base_product_id: baseProductId || undefined,
-        product_id: productId || undefined,
-        target_yield_percent: realYield, // Save real yield
-        evaporation_percent: evap,
-        description: description || undefined,
-        process_instructions: processInstructions || undefined,
-      },
-      ingredients.map(i => ({
-        product_id: i.product_id,
-        amount_per_kg_base: i.amount_per_kg_base,
-        unit: i.unit,
-      }))
-    );
-    
-    onOpenChange(false);
+    try {
+      await onSubmit(
+        {
+          company_id: companyId,
+          name: name.trim(),
+          base_product_id: baseProductId || undefined,
+          product_id: productId || undefined,
+          target_yield_percent: realYield, // Save real yield
+          evaporation_percent: evap,
+          description: description || undefined,
+          process_instructions: processInstructions || undefined,
+        },
+        ingredients.map(i => ({
+          product_id: i.product_id,
+          amount_per_kg_base: i.amount_per_kg_base,
+          unit: i.unit,
+        }))
+      );
+      
+      onOpenChange(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Błąd podczas zapisywania receptury";
+      toast.error(message);
+    }
   };
 
   const getCategoryBadge = (category: string | null) => {
