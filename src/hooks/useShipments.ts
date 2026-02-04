@@ -31,7 +31,7 @@ export interface Shipment {
   customer?: { name: string; vet_number: string | null };
   carrier?: { name: string };
   facility?: { name: string; vet_approval_number: string | null };
-  company?: { name: string; short_name: string | null; tax_id: string };
+  company?: { name: string; short_name: string | null; tax_id: string; main_address_json: Record<string, unknown> | null };
 }
 
 export interface ShipmentItem {
@@ -139,7 +139,7 @@ export function useShipment(id: string | undefined) {
           customer:t_contractors!t_shipments_customer_id_fkey(name, vet_number),
           carrier:t_contractors!t_shipments_carrier_id_fkey(name),
           facility:t_facilities(name, vet_approval_number),
-          company:t_companies(name, short_name, tax_id)
+          company:t_companies(name, short_name, tax_id, main_address_json)
         `)
         .eq("id", id)
         .maybeSingle();

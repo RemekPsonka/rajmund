@@ -264,10 +264,24 @@ export default function ShipmentDetailPage() {
         .filter(Boolean)
         .join(", ") || "Produkty mięsne";
 
+      // Extract address from company's main_address_json
+      const companyAddress = shipment.company?.main_address_json as {
+        street?: string;
+        city?: string;
+        postal_code?: string;
+      } | null;
+      const senderAddress = companyAddress 
+        ? `${companyAddress.street || ""}, ${companyAddress.postal_code || ""} ${companyAddress.city || ""}`.trim()
+        : "";
+
       doc = (
         <CMRDocument
           shipment={shipment}
-          sender={{ name: companyData.name, country: "Polska" }}
+          sender={{ 
+            name: companyData.name, 
+            address: senderAddress || facilityData.name,
+            country: "Polska" 
+          }}
           recipient={customerData}
           carrier={carrierData}
           goodsDescription={goodsDescription}
