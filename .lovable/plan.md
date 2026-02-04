@@ -1,136 +1,122 @@
 
-## Plan: Rozbudowa Terminala Masowni o Start Procesu i Wybór Receptury
+## Plan: Naprawa systemu receptur - automatyczny uzysk i walidacja
 
 ### Zidentyfikowane problemy
 
-1. **Brak etapu "Start procesu"** - terminal przeskakuje z dodawania wsadu bezpośrednio do wyjścia
-2. **Brak możliwości przypisania receptury** - kolumna `recipe_id` istnieje w bazie, ale UI jej nie obsługuje  
-3. **Brak receptur w systemie** - tabela `t_recipes` jest pusta (trzeba najpierw utworzyć receptury w ustawieniach)
+1. **Brak walidacji parowania** - w formularzu receptury można wpisać >100% parowania (np. 110%), co daje ujemny uzysk
+2. **Błędne dane w istniejącej recepturze** - "Kebab clasic" ma `evaporation_percent: 110%` i `target_yield_percent: -12%`
+3. **Uzysk teoretyczny wylicza się poprawnie z receptury** - kod już działa (linie 94-106 w RecipeFormDialog), ale terminal też musi to liczyć
+4. **Terminal masowni przelicza uzysk poprawnie** - kod w liniach 305-318 robi to dobrze, ale z błędnymi danymi wejściowymi daje zły wynik
 
-### Architektura rozwiązania
-
-Rozszerzę przepływ terminala z 2 do 3 kroków:
+### Rozwiązanie
 
 ```text
-┌────────────┐     ┌─────────────────┐     ┌─────────────┐
-│ 1. WSAD    │────►│ 2. START        │────►│ 3. WYJŚCIE  │
-│ (Input)    │     │ (Receptura)     │     │ (Output)    │
-└────────────┘     └─────────────────┘     └─────────────┘
-     │                    │                      │
-     ▼                    ▼                      ▼
-  Skanuj partia      Wybierz recepturę      Waż wyroby
-  wsadowe            Ustaw parametry        gotowe
-                     START PROCESU
+┌───────────────────────────────────────────────────────────────┐
+│ FORMULARZ RECEPTURY (RecipeFormDialog.tsx)                    │
+├───────────────────────────────────────────────────────────────┤
+│ • Walidacja: evaporation_percent musi być w zakresie 0-50%    │
+│ • Blokada zapisania receptury z ujemnym uzyskiem              │
+│ • Jasne komunikaty o błędach                                  │
+└───────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────┐
+│ WYŚWIETLANIE (RecipesPage + Terminal)                         │
+├───────────────────────────────────────────────────────────────┤
+│ • Jeśli target_yield_percent ≤ 0 → wyświetlaj "⚠️ Błąd"       │
+│ • Terminal: dodatkowe zabezpieczenie przed ujemnym uzyskiem   │
+└───────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────┐
+│ NAPRAWA DANYCH                                                │
+├───────────────────────────────────────────────────────────────┤
+│ • Aktualizacja receptury "Kebab clasic":                      │
+│   evaporation_percent: 3% (typowe dla masowania)              │
+│   target_yield_percent: (przeliczone automatycznie)           │
+└───────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ### Szczegóły techniczne
 
-#### 1. Aktualizacja interfejsu `ProductionOrder`
+#### 1. Walidacja w RecipeFormDialog.tsx
 
-Dodanie pola `recipe_id` i `machine_id` do interfejsu TypeScript:
+Dodanie walidacji przed zapisem:
 
-```typescript
-// src/hooks/useProductionOrders.ts
-export interface ProductionOrder {
-  // ... istniejące pola
-  recipe_id: string | null;
-  machine_id: string | null;
-}
-```
+| Pole | Walidacja | Komunikat |
+|------|-----------|-----------|
+| `evaporation_percent` | max 50% | "Parowanie nie może przekraczać 50%" |
+| `realYield` | > 0% | "Uzysk musi być dodatni - zmniejsz parowanie lub dodaj składniki" |
 
-#### 2. Nowy hook do aktualizacji zlecenia
+Zmiana w komponencie:
+- Walidacja pola parowania: `max="50"` (już jest) + sprawdzenie JS przed zapisem
+- Sprawdzenie realYield > 0 przed wywołaniem `onSubmit`
+- Toast z jasnym komunikatem błędu
 
-```typescript
-// src/hooks/useProductionOrders.ts
-export function useUpdateProductionOrder() {
-  return useMutation({
-    mutationFn: async ({ id, ...data }) => {
-      const { error } = await supabase
-        .from("t_production_orders")
-        .update(data)
-        .eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["production-orders"] });
-    },
-  });
-}
-```
+#### 2. Wyświetlanie w tabeli RecipesPage.tsx
 
-#### 3. Rozszerzenie TumblerTerminalPage.tsx
+Obecny kod pokazuje tylko wartość z bazy. Zmienię na:
+- Jeśli `target_yield_percent ≤ 0` → czerwony badge z komunikatem "Błąd"
+- Jeśli poprawne → zielony kolor dla wartości
 
-| Element | Zmiana |
-|---------|--------|
-| **Step state** | `"input" \| "processing" \| "output"` (dodany środkowy krok) |
-| **Receptura** | Dropdown z listą receptur dla wybranej firmy |
-| **Start procesu** | Przycisk zapisujący `recipe_id` i `machine_id` do zlecenia |
-| **Wskaźnik kroków** | 3 kroki zamiast 2 |
+#### 3. Terminal masowni - zabezpieczenie
 
-#### 4. Nowy komponent: Panel startu procesu
+Dodatkowe zabezpieczenie w wyświetlaniu uzysku:
+- `Math.max(0, real)` - nigdy nie pokazuj ujemnych wartości
+- Wizualne ostrzeżenie gdy uzysk < 50%
 
-Nowy etap w terminalu:
+#### 4. Naprawa istniejących danych
 
-```text
-┌─────────────────────────────────────────────┐
-│ 2. START PROCESU                            │
-├─────────────────────────────────────────────┤
-│                                             │
-│  Receptura: [▼ Wybierz recepturę        ]   │
-│                                             │
-│  ┌─────────────────────────────────────┐    │
-│  │ Składniki receptury:                │    │
-│  │ • Mięso kurczaka 60%  - 0.60 kg/kg  │    │
-│  │ • Przyprawa kebab     - 0.02 kg/kg  │    │
-│  │ • Sól                 - 0.01 kg/kg  │    │
-│  └─────────────────────────────────────┘    │
-│                                             │
-│  Oczekiwany uzysk: 85%                      │
-│  Parowanie: 3%                              │
-│                                             │
-│  [        🟢 START PROCESU        ]         │
-│                                             │
-└─────────────────────────────────────────────┘
-```
+Aktualizacja receptury w bazie poprzez edycję w UI:
+1. Użytkownik otworzy recepturę "Kebab clasic" do edycji
+2. Zmieni parowanie z 110% na np. 3%
+3. Zapisze - `target_yield_percent` przeliczy się automatycznie
 
 ---
 
 ### Pliki do modyfikacji
 
-| Plik | Akcja | Opis |
-|------|-------|------|
-| `src/hooks/useProductionOrders.ts` | Edytuj | Dodaj `useUpdateProductionOrder`, rozszerz interfejs |
-| `src/pages/production/TumblerTerminalPage.tsx` | Edytuj | Dodaj krok "Start procesu" z wyborem receptury |
+| Plik | Akcja | Zmiana |
+|------|-------|--------|
+| `src/components/recipes/RecipeFormDialog.tsx` | Edytuj | Walidacja: evaporation max 50%, realYield > 0 |
+| `src/pages/settings/RecipesPage.tsx` | Edytuj | Wyświetlanie błędnych uzysków jako ⚠️ |
+| `src/pages/production/TumblerTerminalPage.tsx` | Edytuj | Zabezpieczenie przed ujemnym uzyskiem |
 
 ---
 
-### Przepływ użytkownika (po zmianie)
+### Logika walidacji
 
-1. **Wybór zlecenia i maszyny** (bez zmian)
-2. **Krok 1 - Wsad**: Skanowanie partii wsadowych (bez zmian)
-3. **Krok 2 - Start procesu** (NOWY):
-   - Wybór receptury z listy
-   - Podgląd składników i parametrów
-   - Przycisk "START PROCESU" zapisuje `recipe_id` i `machine_id` do zlecenia
-4. **Krok 3 - Wyjście**: Ważenie wyrobów gotowych (bez zmian)
-
----
-
-### Uwaga: Wymagane receptury
-
-Aby krok "Start procesu" działał, system musi mieć utworzone receptury. Sprawdzenie pokazało, że **tabela t_recipes jest obecnie pusta**. 
-
-Po wdrożeniu tej zmiany, użytkownik będzie musiał:
-1. Przejść do Ustawienia → Receptury
-2. Utworzyć recepturę dla masy kebabowej
-3. Wrócić do Terminala Masowni i wybrać utworzoną recepturę
+```text
+handleSubmit():
+  1. Sprawdź czy name jest wypełnione ✓ (już jest)
+  2. NOWE: Sprawdź czy evaporationPercent ≤ 50
+  3. NOWE: Sprawdź czy realYield > 0
+  4. Jeśli błąd → toast.error() i return
+  5. Zapisz recepturę
+```
 
 ---
 
-### Zależności
+### Przykład prawidłowej receptury
 
-- Import hooka `useRecipes` z `@/hooks/useRecipes`
-- Import hooka `useRecipeIngredients` do wyświetlenia składników
-- Nowy hook `useUpdateProductionOrder` do zapisania `recipe_id`
+```text
+Receptura: Kebab Classic
+├── Surowiec bazowy: Mięso kurczaka (100%)
+├── Składniki:
+│   ├── Przyprawa kebab: 0.020 kg/kg (+2%)
+│   ├── Sól:             0.008 kg/kg (+0.8%)
+│   └── Marynata:        0.050 kg/kg (+5%)
+├── Uzysk teoretyczny:   107.8% (100 + 2 + 0.8 + 5)
+├── Parowanie:           3%
+└── Uzysk realny:        104.57% (107.8 × 0.97)
+```
+
+---
+
+### Efekt końcowy
+
+Po wdrożeniu:
+1. Nie będzie można wprowadzić parowania > 50%
+2. Nie będzie można zapisać receptury z ujemnym uzyskiem
+3. Terminal poprawnie wyświetli uzysk
+4. Istniejące błędne receptury będą wizualnie oznaczone jako wymagające korekty
