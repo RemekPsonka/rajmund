@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Plus, Search, Users, QrCode, Filter, Pencil } from "lucide-react";
+import { Plus, Search, Users, QrCode, Filter, Pencil, Copy, Printer } from "lucide-react";
+import { toast } from "sonner";
 import { useEmployees, type Employee } from "@/hooks/useEmployees";
 import { useFacilities } from "@/hooks/useFacilities";
 import { Button } from "@/components/ui/button";
@@ -192,12 +193,35 @@ export default function EmployeesPage() {
             <DialogDescription>{selectedEmployee?.name}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center gap-4 py-6">
-            <div className="rounded-lg border bg-card p-4">
+            <div className="rounded-lg border bg-card p-4" id="qr-print-area">
               {selectedEmployee && (
                 <QRCodeSVG value={selectedEmployee.qrCode} size={200} level="H" />
               )}
             </div>
             <p className="text-sm text-muted-foreground font-mono">{selectedEmployee?.qrCode}</p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (selectedEmployee) {
+                    navigator.clipboard.writeText(selectedEmployee.qrCode);
+                    toast.success("Kod skopiowany do schowka");
+                  }
+                }}
+              >
+                <Copy className="mr-2 h-4 w-4" />
+                Kopiuj kod
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.print()}
+              >
+                <Printer className="mr-2 h-4 w-4" />
+                Drukuj
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
