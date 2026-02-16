@@ -4,9 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Dashboard from "./pages/Dashboard";
-import AuthPage from "./pages/auth/AuthPage";
 import CompaniesPage from "./pages/companies/CompaniesPage";
 import CompanyDetailPage from "./pages/companies/CompanyDetailPage";
 import FacilitiesPage from "./pages/facilities/FacilitiesPage";
@@ -51,53 +49,46 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          {/* Public routes */}
-          <Route path="/auth" element={<AuthPage />} />
-          
-          {/* Protected routes with layout */}
-          <Route element={<ProtectedRoute />}>
-            <Route element={<DashboardLayout />}>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/companies" element={<CompaniesPage />} />
-              <Route path="/companies/:id" element={<CompanyDetailPage />} />
-              <Route path="/facilities" element={<FacilitiesPage />} />
-              <Route path="/employees" element={<EmployeesPage />} />
-              <Route path="/products" element={<ProductsPage />} />
-              <Route path="/warehouse/deliveries" element={<DeliveriesPage />} />
-              <Route path="/warehouse/deliveries/new" element={<NewDeliveryPage />} />
-              <Route path="/warehouse/batches" element={<BatchesPage />} />
-              <Route path="/warehouse/transfers" element={<TransfersPage />} />
-              <Route path="/warehouse/transfers/new" element={<NewTransferPage />} />
-              <Route path="/warehouse/packaging" element={<PackagingBalancePage />} />
-              <Route path="/production/orders" element={<ProductionOrdersPage />} />
-              <Route path="/production/orders/:id" element={<ProductionOrderDetailPage />} />
-              <Route path="/production/analytics" element={<ProductionAnalyticsPage />} />
-              <Route path="/production/palletization" element={<PalletizationPage />} />
-              <Route path="/shipping" element={<ShipmentsPage />} />
-              <Route path="/shipping/:id" element={<ShipmentDetailPage />} />
-              <Route path="/dev-tools" element={<DevToolsPage />} />
-              <Route path="/dev/seed" element={<DevToolsPage />} />
-              <Route path="/system-health" element={<SystemHealthPage />} />
-              <Route path="/settings/locations" element={<StorageLocationsPage />} />
-              <Route path="/settings/devices" element={<DevicesPage />} />
-              <Route path="/settings/packaging-types" element={<PackagingTypesPage />} />
-              <Route path="/settings/units" element={<UnitsOfMeasurePage />} />
-              <Route path="/settings/recipes" element={<RecipesPage />} />
-              <Route path="/settings/task-templates" element={<TaskTemplatesPage />} />
-              <Route path="/settings/users" element={<UsersPage />} />
-              <Route path="/settings/permissions" element={<PermissionsPage />} />
-              <Route path="/settings/job-positions" element={<JobPositionsPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-            </Route>
+          {/* All routes with layout */}
+          <Route element={<DashboardLayout />}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/companies" element={<CompaniesPage />} />
+            <Route path="/companies/:id" element={<CompanyDetailPage />} />
+            <Route path="/facilities" element={<FacilitiesPage />} />
+            <Route path="/employees" element={<EmployeesPage />} />
+            <Route path="/products" element={<ProductsPage />} />
+            <Route path="/warehouse/deliveries" element={<DeliveriesPage />} />
+            <Route path="/warehouse/deliveries/new" element={<NewDeliveryPage />} />
+            <Route path="/warehouse/batches" element={<BatchesPage />} />
+            <Route path="/warehouse/transfers" element={<TransfersPage />} />
+            <Route path="/warehouse/transfers/new" element={<NewTransferPage />} />
+            <Route path="/warehouse/packaging" element={<PackagingBalancePage />} />
+            <Route path="/production/orders" element={<ProductionOrdersPage />} />
+            <Route path="/production/orders/:id" element={<ProductionOrderDetailPage />} />
+            <Route path="/production/analytics" element={<ProductionAnalyticsPage />} />
+            <Route path="/production/palletization" element={<PalletizationPage />} />
+            <Route path="/shipping" element={<ShipmentsPage />} />
+            <Route path="/shipping/:id" element={<ShipmentDetailPage />} />
+            <Route path="/dev-tools" element={<DevToolsPage />} />
+            <Route path="/dev/seed" element={<DevToolsPage />} />
+            <Route path="/system-health" element={<SystemHealthPage />} />
+            <Route path="/settings/locations" element={<StorageLocationsPage />} />
+            <Route path="/settings/devices" element={<DevicesPage />} />
+            <Route path="/settings/packaging-types" element={<PackagingTypesPage />} />
+            <Route path="/settings/units" element={<UnitsOfMeasurePage />} />
+            <Route path="/settings/recipes" element={<RecipesPage />} />
+            <Route path="/settings/task-templates" element={<TaskTemplatesPage />} />
+            <Route path="/settings/users" element={<UsersPage />} />
+            <Route path="/settings/permissions" element={<PermissionsPage />} />
+            <Route path="/settings/job-positions" element={<JobPositionsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Route>
           
-          {/* Terminals without layout - full screen (still protected) */}
-          <Route element={<ProtectedRoute />}>
-            <Route path="/production/terminal" element={<WeighingTerminalPage />} />
-            <Route path="/production/tumbler" element={<TumblerTerminalPage />} />
-            <Route path="/production/assembly" element={<KebabAssemblyTerminalPage />} />
-            <Route path="/production/freezing" element={<ShockFreezingTerminalPage />} />
-          </Route>
+          {/* Terminals without layout - full screen */}
+          <Route path="/production/terminal" element={<WeighingTerminalPage />} />
+          <Route path="/production/tumbler" element={<TumblerTerminalPage />} />
+          <Route path="/production/assembly" element={<KebabAssemblyTerminalPage />} />
+          <Route path="/production/freezing" element={<ShockFreezingTerminalPage />} />
           
           <Route path="*" element={<NotFound />} />
         </Routes>
