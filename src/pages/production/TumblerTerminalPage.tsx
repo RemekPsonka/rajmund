@@ -417,6 +417,37 @@ export default function TumblerTerminalPage() {
     };
   }, [selectedRecipe, recipeIngredients]);
 
+  // Sprint: walidacja zgodności wsadu z recepturą (±5% per składnik)
+  const recipeCheck = useMemo(() => {
+    if (!selectedRecipeId || !recipeIngredients?.length) {
+      return { active: false, ok: true, perIngredient: [] as Array<{
+        id: string; name: string; role: string; required: number; actual: number; inTol: boolean;
+      }> };
+    }
+    const sumRatio = recipeIngredients.reduce(
+      (s, i) => s + (Number(i.amount_per_kg_base) || Number(i.ratio) || 0),
+      0
+    ) || 1;
+    const perIngredient = recipeIngredients.map((ing) => {
+      const raw = Number(ing.amount_per_kg_base) || Number(ing.ratio) || 0;
+      const required = (targetTotalKg || 0) * (raw / sumRatio);
+      const actual = inputItems
+        .filter((it) => it.productId === ing.product_id)
+        .reduce((s, it) => s + it.weight, 0);
+      const tolerance = required * (RECIPE_TOLERANCE_PERCENT / 100);
+      const inTol = required > 0 ? Math.abs(actual - required) <= tolerance : actual === 0;
+      return {
+        id: ing.id,
+        name: ing.product?.name || "—",
+        role: ing.role || "MEAT",
+        required,
+        actual,
+        inTol,
+      };
+    });
+    return { active: true, ok: perIngredient.every((p) => p.inTol), perIngredient };
+  }, [selectedRecipeId, recipeIngredients, inputItems, targetTotalKg]);
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
