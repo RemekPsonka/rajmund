@@ -443,6 +443,15 @@ export default function TumblerTerminalPage() {
         </div>
       </header>
 
+      {/* State Machine */}
+      <div className="px-4 py-2 shrink-0 border-b">
+        <StateMachineBadge
+          states={STATE_MACHINES.tumbling}
+          current={tumblingState}
+          timer={{ stateStartedAt }}
+        />
+      </div>
+
       {/* Context Bar */}
       <div className="bg-primary/5 border-b px-4 py-3 shrink-0">
         <div className="flex items-center gap-4 flex-wrap">
