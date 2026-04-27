@@ -268,6 +268,19 @@ export default function ShockFreezingTerminalPage() {
   // Check if ready
   const canOperate = selectedCompanyId && selectedFacilityId && selectedChamber && verifiedEmployee;
 
+  // State machine (UI-only). Verified/Released — placeholdery (brak akcji weryfikacji w UI).
+  const freezingState: FreezingState = useMemo(() => {
+    if (!canOperate || freezingItems.length === 0) return "Loading";
+    if (activeCount > 0) return "Freezing";
+    if (completedCount > 0) return "Stabilizing";
+    return "Loading";
+  }, [canOperate, freezingItems.length, activeCount, completedCount]);
+
+  const [stateStartedAt, setStateStartedAt] = useState<number>(() => Date.now());
+  useEffect(() => {
+    setStateStartedAt(Date.now());
+  }, [freezingState]);
+
   return (
     <div className="min-h-screen bg-background p-4">
       {/* Header */}
