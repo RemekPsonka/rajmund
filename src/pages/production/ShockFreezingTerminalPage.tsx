@@ -84,6 +84,10 @@ export default function ShockFreezingTerminalPage() {
   const createLog = useCreateProductionLog();
   const updateLog = useUpdateProductionLog();
   const createOrder = useCreateProductionOrder();
+  const closeOrder = useCloseProductionOrder();
+
+  // Local input state for temperature reading per item
+  const [tempInputs, setTempInputs] = useState<Record<string, string>>({});
 
   // Load existing freezing logs from DB when facility changes
   useEffect(() => {
@@ -98,6 +102,9 @@ export default function ShockFreezingTerminalPage() {
           startedAt: new Date(log.freezing_started_at || log.created_at),
           status: "freezing" as const,
           dbLogId: log.id,
+          productionOrderId: log.production_order_id,
+          latestTempC: log.latest_core_temp_c ?? null,
+          ccpPassed: log.ccp_passed ?? null,
         }));
       
       // Merge with local items (avoid duplicates)
@@ -213,6 +220,9 @@ export default function ShockFreezingTerminalPage() {
         startedAt: new Date(),
         status: "freezing",
         dbLogId: logResult.id,
+        productionOrderId: freezingOrder.id,
+        latestTempC: null,
+        ccpPassed: null,
       };
 
       setFreezingItems(prev => [...prev, newItem]);
