@@ -95,7 +95,38 @@ interface SimulationResult {
 export default function DevToolsPage() {
   const navigate = useNavigate();
   const [isRunning, setIsRunning] = useState(false);
+  const [isSeeding, setIsSeeding] = useState(false);
+  const [isCleaning, setIsCleaning] = useState(false);
   const [result, setResult] = useState<SimulationResult | null>(null);
+
+  const handleSeedMinimal = async () => {
+    setIsSeeding(true);
+    try {
+      const { data, error } = await supabase.rpc("seed_minimal_demo" as never);
+      if (error) throw error;
+      const r = data as { products_count?: number; employees_count?: number; recipes_count?: number; open_orders?: number };
+      toast.success(
+        `Demo zaseedowane: ${r.products_count ?? 5} produktów, ${r.recipes_count ?? 2} receptury, ${r.employees_count ?? 4} pracowników, ${r.open_orders ?? 1} zlecenie`,
+      );
+    } catch (e: unknown) {
+      toast.error(`Błąd seedowania: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setIsSeeding(false);
+    }
+  };
+
+  const handleCleanupDemo = async () => {
+    setIsCleaning(true);
+    try {
+      const { error } = await supabase.rpc("cleanup_demo_data" as never);
+      if (error) throw error;
+      toast.success("Dane testowe (DEMO) wyczyszczone");
+    } catch (e: unknown) {
+      toast.error(`Błąd czyszczenia: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setIsCleaning(false);
+    }
+  };
 
   const handleRunSimulation = async () => {
     setIsRunning(true);
@@ -164,6 +195,36 @@ export default function DevToolsPage() {
                 testowymi.
               </p>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Minimalny seed demo */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Database className="h-5 w-5" />
+            Demo minimalny — przygotowanie sceny
+          </CardTitle>
+          <CardDescription>
+            1 firma NARROW, 1 zakład Myszków, 3 dostawców, 5 produktów, 2 receptury, 4 pracowników z QR i 1 otwarte zlecenie rozbioru. Bez ruchu produkcyjnego.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={handleSeedMinimal} disabled={isSeeding || isCleaning} size="lg">
+              {isSeeding ? <Loader2 className="h-5 w-5 mr-2 animate-spin" /> : <Play className="h-5 w-5 mr-2" />}
+              Zaseeduj demo (minimalny)
+            </Button>
+            <Button
+              onClick={handleCleanupDemo}
+              disabled={isSeeding || isCleaning}
+              variant="outline"
+              size="lg"
+            >
+              {isCleaning ? <Loader2 className="h-5 w-5 mr-2 animate-spin" /> : <RefreshCw className="h-5 w-5 mr-2" />}
+              Wyczyść dane testowe
+            </Button>
           </div>
         </CardContent>
       </Card>
