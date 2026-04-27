@@ -30,6 +30,8 @@ import { useCompanies } from "@/hooks/useCompanies";
 import { useFacilities } from "@/hooks/useFacilities";
 import { useBatches, lookupBatchByCode, getBatchRejectionReason } from "@/hooks/useBatches";
 import { useProducts } from "@/hooks/useProducts";
+import { StateMachineBadge } from "@/components/production/StateMachineBadge";
+import { STATE_MACHINES, type FreezingState } from "@/lib/stateMachines";
 
 const FREEZING_CHAMBERS = [
   { id: "chamber-1", name: "Komora 1 (-35°C)" },
@@ -266,6 +268,19 @@ export default function ShockFreezingTerminalPage() {
   // Check if ready
   const canOperate = selectedCompanyId && selectedFacilityId && selectedChamber && verifiedEmployee;
 
+  // State machine (UI-only). Verified/Released — placeholdery (brak akcji weryfikacji w UI).
+  const freezingState: FreezingState = useMemo(() => {
+    if (!canOperate || freezingItems.length === 0) return "Loading";
+    if (activeCount > 0) return "Freezing";
+    if (completedCount > 0) return "Stabilizing";
+    return "Loading";
+  }, [canOperate, freezingItems.length, activeCount, completedCount]);
+
+  const [stateStartedAt, setStateStartedAt] = useState<number>(() => Date.now());
+  useEffect(() => {
+    setStateStartedAt(Date.now());
+  }, [freezingState]);
+
   return (
     <div className="min-h-screen bg-background p-4">
       {/* Header */}
@@ -282,6 +297,15 @@ export default function ShockFreezingTerminalPage() {
             <p className="text-muted-foreground">Terminal kontroli procesu mrożenia</p>
           </div>
         </div>
+      </div>
+
+      {/* State Machine */}
+      <div className="mb-4">
+        <StateMachineBadge
+          states={STATE_MACHINES.freezing}
+          current={freezingState}
+          timer={{ stateStartedAt }}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

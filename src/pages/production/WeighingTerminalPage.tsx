@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { StateMachineBadge } from "@/components/production/StateMachineBadge";
+import { STATE_MACHINES, type WeighingState } from "@/lib/stateMachines";
 import {
   Users,
   Check,
@@ -155,6 +157,15 @@ export default function WeighingTerminalPage() {
   const todayLogsCount = logs?.length || 0;
   const todayTotalWeight = logs?.reduce((sum, log) => sum + log.weight_net, 0) || 0;
 
+  // State-machine derive (UI-only, brak persystencji)
+  const weighingState: WeighingState = useMemo(() => {
+    if (selectedOrder?.status === "Closed") return "Transferred";
+    if (!selectedOrderId || !weighingEmployeeId) return "Pending";
+    if (weightGross > 0) return "Gross_Read";
+    if (containerCount > 0) return "Tare_Read";
+    return "Pending";
+  }, [selectedOrder?.status, selectedOrderId, weighingEmployeeId, weightGross, containerCount]);
+
   // Get employee names for display
   const getEmployeeName = (id: string) => {
     const emp = employees?.find((e) => e.id === id);
@@ -185,6 +196,11 @@ export default function WeighingTerminalPage() {
           </Button>
         </div>
       </header>
+
+      {/* State Machine */}
+      <div className="px-4 py-2 shrink-0 border-b">
+        <StateMachineBadge states={STATE_MACHINES.weighing} current={weighingState} />
+      </div>
 
       {/* Context Bar - Order, Scale, Station Selection */}
       <div className="bg-primary/5 border-b px-4 py-3 shrink-0">

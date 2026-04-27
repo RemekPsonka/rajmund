@@ -37,6 +37,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { StateMachineBadge } from "@/components/production/StateMachineBadge";
+import { STATE_MACHINES, type TumblingState } from "@/lib/stateMachines";
 
 import { useProducts } from "@/hooks/useProducts";
 import { useEmployees } from "@/hooks/useEmployees";
@@ -161,6 +163,24 @@ export default function TumblerTerminalPage() {
   
   // Net weight
   const weightNet = Math.max(0, weightGross - weightTare);
+
+  // ── State machine (UI-only). Mapowanie patrz plan; Resting/Discharging
+  // pozostają w definicji, ale bez triggerów (placeholder przyszłej rozbudowy).
+  const tumblingState: TumblingState = useMemo(() => {
+    if (selectedOrder?.status === "Closed") return "Closed";
+    if (!selectedOrderId) return "Idle";
+    if (step === "output") {
+      return (existingLogs && existingLogs.length > 0) ? "Done" : "Mixing";
+    }
+    if (step === "processing") return "Loaded";
+    // step === 'input'
+    return inputItems.length > 0 ? "Loading" : "Idle";
+  }, [selectedOrder?.status, selectedOrderId, step, existingLogs, inputItems.length]);
+
+  const [stateStartedAt, setStateStartedAt] = useState<number>(() => Date.now());
+  useEffect(() => {
+    setStateStartedAt(Date.now());
+  }, [tumblingState]);
 
   // Verify employee
   const verifyEmployee = useCallback(() => {
@@ -422,6 +442,15 @@ export default function TumblerTerminalPage() {
           </Button>
         </div>
       </header>
+
+      {/* State Machine */}
+      <div className="px-4 py-2 shrink-0 border-b">
+        <StateMachineBadge
+          states={STATE_MACHINES.tumbling}
+          current={tumblingState}
+          timer={{ stateStartedAt }}
+        />
+      </div>
 
       {/* Context Bar */}
       <div className="bg-primary/5 border-b px-4 py-3 shrink-0">

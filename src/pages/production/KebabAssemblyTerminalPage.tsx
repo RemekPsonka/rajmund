@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, User, Scan, Plus, Scale, Trash2, Package, CheckCircle, AlertCircle, ChefHat } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,8 @@ import { useEmployees } from "@/hooks/useEmployees";
 import { useProducts, type Product } from "@/hooks/useProducts";
 import { KEBAB_WEIGHT_VARIANTS, useCreateKebabVariants } from "@/hooks/useKebabVariants";
 import { cn } from "@/lib/utils";
+import { StateMachineBadge } from "@/components/production/StateMachineBadge";
+import { STATE_MACHINES, type AssemblyState } from "@/lib/stateMachines";
 
 interface AssembledKebab {
   id: string;
@@ -241,6 +243,13 @@ export default function KebabAssemblyTerminalPage() {
   // Check if ready to assemble
   const canAssemble = !!(selectedProduct && selectedBatch && createdOrderId && verifiedEmployee);
 
+  // State machine (UI-only). Pierwsza iteracja: Setup → Producing → Quality_Check → Closed.
+  const assemblyState: AssemblyState = useMemo(() => {
+    if (!selectedProduct || !selectedBatch || !verifiedEmployee || !createdOrderId) return "Setup";
+    if (assembledKebabs.length === 0) return "Producing";
+    return "Quality_Check";
+  }, [selectedProduct, selectedBatch, verifiedEmployee, createdOrderId, assembledKebabs.length]);
+
   // Gate 1: brak zdefiniowanych produktów-wyrobów (kebabów) — pełnoekranowy blocker
   if (!isLoadingProducts && (!kebabProducts || kebabProducts.length === 0)) {
     return (
@@ -429,8 +438,12 @@ export default function KebabAssemblyTerminalPage() {
         </Button>
       </div>
 
+      {/* State Machine */}
+      <div className="mb-4">
+        <StateMachineBadge states={STATE_MACHINES.assembly} current={assemblyState} />
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - Context */}
         <div className="space-y-4">
           {/* Selected Batch Info */}
           <Card className="border-primary">
