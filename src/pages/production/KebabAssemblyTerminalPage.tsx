@@ -199,17 +199,16 @@ export default function KebabAssemblyTerminalPage() {
         direction: "Assembly",
       });
 
-      // 2. Create production log for the output - safely get product_id
-      const outputProductId = finishedProducts[0]?.id || selectedBatch.output_batch.product.id;
-      if (!outputProductId) {
-        toast.error("Brak produktu docelowego - dodaj produkt typu 'Finished Good'");
+      // 2. Create production log for the output — używamy produktu wybranego przez operatora
+      if (!selectedProduct) {
+        toast.error("Nie wybrano produktu docelowego");
         return;
       }
 
       const logResult = await createLog.mutateAsync({
         production_order_id: createdOrderId,
         employee_id: verifiedEmployee.id,
-        product_id: outputProductId,
+        product_id: selectedProduct.id,
         source_batch_id: selectedBatch.output_batch.id,
         weight_gross: totalAssembled + parseFloat(tareWeight) * totalCount,
         weight_tare: parseFloat(tareWeight) * totalCount,
