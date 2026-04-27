@@ -39,7 +39,7 @@ import {
 
 import { useProducts } from "@/hooks/useProducts";
 import { useEmployees } from "@/hooks/useEmployees";
-import { useBatches } from "@/hooks/useBatches";
+import { useBatches, lookupBatchByCode, getBatchRejectionReason } from "@/hooks/useBatches";
 import {
   useProductionOrders,
   useCreateProductionInput,
@@ -166,42 +166,38 @@ export default function TumblerTerminalPage() {
   }, [employeeCode, verifyEmployee]);
 
   // Scan batch for input
-  const handleBatchScan = useCallback(() => {
-    if (!batchScanCode.trim()) return;
-    
-    const batch = batches?.find(
-      b => b.internal_batch_number.toLowerCase() === batchScanCode.toLowerCase()
+  const handleBatchScan = useCallback(async () => {
+    const code = batchScanCode.trim();
+    if (!code) return;
+
+    let batch = batches?.find(
+      b => b.internal_batch_number.toLowerCase() === code.toLowerCase()
     );
 
+    // Fallback lookup po wszystkich statusach by zwrócić właściwy komunikat odrzucenia
     if (!batch) {
-      toast.error("Nie znaleziono partii");
-      setBatchScanCode("");
-      return;
-    }
-
-    // Validate batch has available quantity
-    if (batch.current_quantity <= 0) {
-      toast.error("Partia nie ma dostępnej ilości");
-      setBatchScanCode("");
-      return;
-    }
-
-    // Validate batch is not expired
-    if (batch.expiration_date) {
-      const expiryDate = new Date(batch.expiration_date);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (expiryDate < today) {
-        toast.error("Partia jest przeterminowana!");
+      try {
+        const found = await lookupBatchByCode(code);
+        if (!found) {
+          toast.error(`Nie znaleziono partii o numerze ${code}`);
+          setBatchScanCode("");
+          return;
+        }
+        const reason = getBatchRejectionReason(found);
+        toast.error(reason ?? "Partia nie spełnia wymagań produkcyjnych");
+        setBatchScanCode("");
+        return;
+      } catch (err) {
+        toast.error(`Błąd wyszukiwania partii: ${(err as Error).message}`);
         setBatchScanCode("");
         return;
       }
     }
 
     const product = products?.find(p => p.id === batch.product_id);
-    
+
     // Check if already added
-    if (inputItems.some(item => item.batchId === batch.id)) {
+    if (inputItems.some(item => item.batchId === batch!.id)) {
       toast.error("Ta partia jest już dodana");
       setBatchScanCode("");
       return;
@@ -209,17 +205,18 @@ export default function TumblerTerminalPage() {
 
     setInputItems(prev => [...prev, {
       id: crypto.randomUUID(),
-      batchNumber: batch.internal_batch_number,
+      batchNumber: batch!.internal_batch_number,
       productName: product?.name || "Nieznany",
-      weight: batch.current_quantity,
-      batchId: batch.id,
-      productId: batch.product_id,
+      weight: batch!.current_quantity,
+      batchId: batch!.id,
+      productId: batch!.product_id,
       direction: inputDirection,
     }]);
-    
+
     toast.success(`Dodano: ${batch.internal_batch_number}`);
     setBatchScanCode("");
   }, [batchScanCode, batches, products, inputItems, inputDirection]);
+
 
   // Remove input item
   const handleRemoveItem = (id: string) => {

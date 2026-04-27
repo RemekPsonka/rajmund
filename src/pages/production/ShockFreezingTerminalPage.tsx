@@ -28,7 +28,7 @@ import { useProductionOrders, useCreateProductionLog, useUpdateProductionLog, us
 import { useEmployees } from "@/hooks/useEmployees";
 import { useCompanies } from "@/hooks/useCompanies";
 import { useFacilities } from "@/hooks/useFacilities";
-import { useBatches } from "@/hooks/useBatches";
+import { useBatches, lookupBatchByCode, getBatchRejectionReason } from "@/hooks/useBatches";
 import { useProducts } from "@/hooks/useProducts";
 
 const FREEZING_CHAMBERS = [
@@ -147,11 +147,22 @@ export default function ShockFreezingTerminalPage() {
       return;
     }
 
-    // Find batch by scanned code
-    const batch = batches?.find(b => b.internal_batch_number.toLowerCase() === scanCode.toLowerCase());
+    // Find batch by scanned code (only available batches in cache)
+    const code = scanCode.trim();
+    let batch = batches?.find(b => b.internal_batch_number.toLowerCase() === code.toLowerCase());
     if (!batch) {
-      toast.error("Nie znaleziono partii");
-      return;
+      try {
+        const found = await lookupBatchByCode(code);
+        if (!found) {
+          toast.error(`Nie znaleziono partii o numerze ${code}`);
+          return;
+        }
+        toast.error(getBatchRejectionReason(found) ?? "Partia nie spełnia wymagań produkcyjnych");
+        return;
+      } catch (err) {
+        toast.error(`Błąd wyszukiwania partii: ${(err as Error).message}`);
+        return;
+      }
     }
 
     const product = products?.find(p => p.id === batch.product_id);
