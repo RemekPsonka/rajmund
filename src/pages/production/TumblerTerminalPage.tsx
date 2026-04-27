@@ -134,7 +134,8 @@ export default function TumblerTerminalPage() {
   const { data: products } = useProducts();
   const { data: batches } = useBatches({ availableOnly: true });
   const { data: existingInputs } = useProductionInputs(selectedOrderId || undefined);
-  
+  const { data: existingLogs } = useProductionLogs(selectedOrderId || undefined);
+
   // Get company_id from selected order for recipes
   const selectedOrder = processingOrders.find(o => o.id === selectedOrderId);
   const { data: recipes } = useRecipes(selectedOrder?.company_id);
@@ -143,6 +144,7 @@ export default function TumblerTerminalPage() {
   const createInput = useCreateProductionInput();
   const createLog = useCreateProductionLog();
   const updateOrder = useUpdateProductionOrder();
+  const closeOrder = useCloseProductionOrder();
 
   // Finished products for output
   const finishedProducts = products?.filter(p => !p.is_raw_material) || [];
