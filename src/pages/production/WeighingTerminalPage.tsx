@@ -13,6 +13,7 @@ import {
   Settings,
 } from "lucide-react";
 import { toast } from "sonner";
+import { mockScaleRead, sleep } from "@/lib/mockHardware";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
