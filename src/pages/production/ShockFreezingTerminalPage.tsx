@@ -28,7 +28,9 @@ import { pl } from "date-fns/locale";
 
 import { useProductionOrders, useCreateProductionLog, useUpdateProductionLog, useFreezingLogs, generateOrderNumber, useCreateProductionOrder, useCloseProductionOrder } from "@/hooks/useProductionOrders";
 import { supabase } from "@/integrations/supabase/client";
-import { mockFreezingTempAt } from "@/lib/mockHardware";
+import { mockFreezingTempAt, mockFreezingTempAtFast } from "@/lib/mockHardware";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { FreezingTempChart } from "@/components/production/FreezingTempChart";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useCompanies } from "@/hooks/useCompanies";
