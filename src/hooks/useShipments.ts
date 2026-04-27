@@ -310,7 +310,7 @@ export function useUpdateShipment() {
 
       const { error } = await supabase
         .from("t_shipments")
-        .update(updateData)
+        .update(updateData as never)
         .eq("id", id);
 
       if (error) throw error;
