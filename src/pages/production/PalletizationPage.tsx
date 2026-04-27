@@ -355,6 +355,9 @@ export default function PalletizationPage() {
                               {pallet.label_printed && <Printer className="h-4 w-4 text-success" />}
                             </div>
                           </div>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            Ostatni wydruk: {formatLastPrint(pallet.id)}
+                          </div>
                         </CardContent>
                       </Card>
                     ))}
