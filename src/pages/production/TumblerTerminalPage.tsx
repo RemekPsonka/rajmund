@@ -831,6 +831,7 @@ export default function TumblerTerminalPage() {
                 )}
               </CardContent>
             </Card>
+            </div>
           </div>
         ) : step === "processing" ? (
           /* Step 2: Processing - Recipe Selection */
