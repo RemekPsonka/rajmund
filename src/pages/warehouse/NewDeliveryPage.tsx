@@ -328,6 +328,9 @@ export default function NewDeliveryPage() {
       }
 
       toast.success(`Dokument ${docNumber} został utworzony`);
+      if (opts?.withComplaintInfo) {
+        toast.warning("Wystawiono auto-reklamację CCP1 (przekroczenie temperatury)");
+      }
       navigate("/warehouse/deliveries");
     } catch (error) {
       console.error(error);
