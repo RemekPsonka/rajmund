@@ -16,6 +16,7 @@ import BatchesPage from "./pages/warehouse/BatchesPage";
 import TransfersPage from "./pages/warehouse/TransfersPage";
 import NewTransferPage from "./pages/warehouse/NewTransferPage";
 import PackagingBalancePage from "./pages/warehouse/PackagingBalancePage";
+import ComplaintsPage from "./pages/warehouse/ComplaintsPage";
 import ProductionOrdersPage from "./pages/production/ProductionOrdersPage";
 import ProductionOrderDetailPage from "./pages/production/ProductionOrderDetailPage";
 import ProductionAnalyticsPage from "./pages/production/ProductionAnalyticsPage";
