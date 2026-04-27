@@ -29,6 +29,7 @@ import {
   generateOrderNumber,
   useCreateProductionInput,
   useCreateProductionLog,
+  useCloseProductionOrder,
   ProcessingOutputBatch
 } from "@/hooks/useProductionOrders";
 import { useEmployees } from "@/hooks/useEmployees";
@@ -81,6 +82,7 @@ export default function KebabAssemblyTerminalPage() {
   const createInput = useCreateProductionInput();
   const createLog = useCreateProductionLog();
   const createVariants = useCreateKebabVariants();
+  const closeOrder = useCloseProductionOrder();
 
   // Sprint: po wyborze produktu — preset wariantu wagi szpady (jeśli zdefiniowano)
   useEffect(() => {
@@ -231,11 +233,20 @@ export default function KebabAssemblyTerminalPage() {
       await createVariants.mutateAsync(variantRecords);
 
       toast.success(`Zapisano ${totalCount} sztuk kebaba (${totalAssembled.toFixed(2)} kg)`);
-      
-      // Reset
-      setAssembledKebabs([]);
-      setSelectedBatch(null);
-      setCreatedOrderId(null);
+
+      // Auto-close zlecenia — żeby ShockFreezing natychmiast widział partię kebabu
+      const orderToClose = createdOrderId;
+      try {
+        await closeOrder.mutateAsync(orderToClose);
+        // Reset terminala — selectedProduct ZOSTAJE (operator zwykle składa kilka partii pod rząd)
+        setAssembledKebabs([]);
+        setSelectedBatch(null);
+        setCreatedOrderId(null);
+      } catch (err) {
+        toast.warning(
+          `Szpady zapisane, ale nie udało się automatycznie zamknąć zlecenia: ${(err as Error).message}. Zamknij ręcznie w /production/orders.`
+        );
+      }
     } catch (error) {
       console.error("Save error:", error);
     }
