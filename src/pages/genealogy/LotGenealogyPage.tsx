@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 import { toast } from "sonner";
-import { ArrowLeft, GitBranch, Package, ArrowUp, ArrowDown } from "lucide-react";
+import { ArrowLeft, GitBranch, Package, ArrowUp, ArrowDown, Truck, Boxes } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useLotLineage, type LineageNode } from "@/hooks/useLotLineage";
