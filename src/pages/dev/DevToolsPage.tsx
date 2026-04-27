@@ -199,6 +199,36 @@ export default function DevToolsPage() {
         </CardContent>
       </Card>
 
+      {/* Minimalny seed demo */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Database className="h-5 w-5" />
+            Demo minimalny — przygotowanie sceny
+          </CardTitle>
+          <CardDescription>
+            1 firma NARROW, 1 zakład Myszków, 3 dostawców, 5 produktów, 2 receptury, 4 pracowników z QR i 1 otwarte zlecenie rozbioru. Bez ruchu produkcyjnego.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={handleSeedMinimal} disabled={isSeeding || isCleaning} size="lg">
+              {isSeeding ? <Loader2 className="h-5 w-5 mr-2 animate-spin" /> : <Play className="h-5 w-5 mr-2" />}
+              Zaseeduj demo (minimalny)
+            </Button>
+            <Button
+              onClick={handleCleanupDemo}
+              disabled={isSeeding || isCleaning}
+              variant="outline"
+              size="lg"
+            >
+              {isCleaning ? <Loader2 className="h-5 w-5 mr-2 animate-spin" /> : <RefreshCw className="h-5 w-5 mr-2" />}
+              Wyczyść dane testowe
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Main Simulation Card */}
       <Card className="border-2">
         <CardHeader>
