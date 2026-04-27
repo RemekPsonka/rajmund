@@ -65,6 +65,15 @@ interface FreezingItem {
 export default function ShockFreezingTerminalPage() {
   const navigate = useNavigate();
 
+  // Demo speed flag (localStorage) — toggler dla prezentacji (5 min do -18°C)
+  const [demoSpeed, setDemoSpeed] = useState<boolean>(
+    () => typeof window !== "undefined" && localStorage.getItem("demo_speed") === "fast",
+  );
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    localStorage.setItem("demo_speed", demoSpeed ? "fast" : "real");
+  }, [demoSpeed]);
+
   // Context
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
   const [selectedFacilityId, setSelectedFacilityId] = useState<string>("");
