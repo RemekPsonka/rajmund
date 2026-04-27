@@ -46,9 +46,12 @@ export interface BatchFormData {
   status?: BatchStatus;
 }
 
-export function useBatches(options?: { availableOnly?: boolean }) {
+export function useBatches(options?: { availableOnly?: boolean; includeBlocked?: boolean }) {
+  const availableOnly = options?.availableOnly ?? false;
+  const includeBlocked = options?.includeBlocked ?? false;
+
   return useQuery({
-    queryKey: ["batches", options?.availableOnly],
+    queryKey: ["batches", availableOnly, includeBlocked],
     queryFn: async () => {
       let query = supabase
         .from("t_batches")
@@ -60,8 +63,9 @@ export function useBatches(options?: { availableOnly?: boolean }) {
         `)
         .order("created_at", { ascending: false });
 
-      // Filter to only available batches (Released status, has quantity, not expired)
-      if (options?.availableOnly) {
+      // Filter to only available batches (Released, qty > 0, not expired).
+      // includeBlocked === true wyłącza filtrowanie (np. dla widoków diagnostycznych).
+      if (availableOnly && !includeBlocked) {
         const today = new Date().toISOString().split('T')[0];
         query = query
           .eq("status", "Released")
@@ -76,6 +80,55 @@ export function useBatches(options?: { availableOnly?: boolean }) {
     },
   });
 }
+
+/**
+ * Sprawdza czy partia może być użyta w produkcji.
+ * Zwraca tekst PL z powodem odrzucenia albo null jeśli partia jest OK.
+ */
+export function getBatchRejectionReason(
+  batch: Pick<Batch, "status" | "current_quantity" | "expiration_date">
+): string | null {
+  if (batch.status === "Blocked") {
+    return "Partia ZABLOKOWANA — nie można użyć w produkcji";
+  }
+  if (batch.status === "Quarantine") {
+    return "Partia w KWARANTANNIE — wymaga zwolnienia QC";
+  }
+  if (batch.expiration_date) {
+    const expiry = new Date(batch.expiration_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (expiry < today) {
+      const formatted = expiry.toLocaleDateString("pl-PL");
+      return `Partia PRZETERMINOWANA — data ważności minęła ${formatted}`;
+    }
+  }
+  if (batch.current_quantity <= 0) {
+    return "Partia nie ma dostępnej ilości";
+  }
+  return null;
+}
+
+/**
+ * Pobiera partię po internal_batch_number (case-insensitive) z dowolnym statusem.
+ * Używane w terminalach do generowania właściwego komunikatu odrzucenia.
+ */
+export async function lookupBatchByCode(code: string): Promise<Batch | null> {
+  const { data, error } = await supabase
+    .from("t_batches")
+    .select(`
+      *,
+      product:t_products(name, sku, unit),
+      supplier:t_contractors(name),
+      location:t_storage_locations(name, location_type)
+    `)
+    .ilike("internal_batch_number", code.trim())
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as Batch | null) ?? null;
+}
+
 
 export function useBatch(id: string | undefined) {
   return useQuery({
