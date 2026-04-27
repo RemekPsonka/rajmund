@@ -625,6 +625,19 @@ export default function ShockFreezingTerminalPage() {
             </CardContent>
           </Card>
 
+          {/* Live Temperature Curve (first active session) */}
+          {(() => {
+            const activeChartItem = freezingItems.find(
+              i => i.status === "freezing" && i.dbLogId
+            );
+            return activeChartItem?.dbLogId ? (
+              <FreezingTempChart
+                productionLogId={activeChartItem.dbLogId}
+                targetTempC={CCP_THRESHOLD_C}
+              />
+            ) : null;
+          })()}
+
           {/* Freezing Items Table */}
           <Card>
             <CardHeader className="pb-3">
