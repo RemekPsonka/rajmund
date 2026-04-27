@@ -1,8 +1,7 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider, MutationCache } from "@tanstack/react-query";
-import { toast as sonnerToast } from "sonner";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
@@ -43,22 +42,7 @@ import SettingsPage from "./pages/SettingsPage";
 import LotGenealogyPage from "./pages/genealogy/LotGenealogyPage";
 import NotFound from "./pages/NotFound";
 
-// Global mutation timing — every successful mutation triggers a HMI-style "Zapisano w X ms" toast.
-// Opt-out per-mutation via meta: { silent: true }.
-const mutationStartTimes = new WeakMap<object, number>();
-const queryClient = new QueryClient({
-  mutationCache: new MutationCache({
-    onMutate: (_vars, mutation) => {
-      mutationStartTimes.set(mutation, Date.now());
-    },
-    onSuccess: (_data, _vars, _ctx, mutation) => {
-      if ((mutation.options.meta as { silent?: boolean } | undefined)?.silent) return;
-      const start = mutationStartTimes.get(mutation);
-      const ms = start ? Date.now() - start : 0;
-      sonnerToast.success(`Zapisano w ${ms} ms`, { duration: 1500 });
-    },
-  }),
-});
+const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

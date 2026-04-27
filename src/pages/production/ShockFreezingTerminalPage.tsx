@@ -28,9 +28,7 @@ import { pl } from "date-fns/locale";
 
 import { useProductionOrders, useCreateProductionLog, useUpdateProductionLog, useFreezingLogs, generateOrderNumber, useCreateProductionOrder, useCloseProductionOrder } from "@/hooks/useProductionOrders";
 import { supabase } from "@/integrations/supabase/client";
-import { mockFreezingTempAt, mockFreezingTempAtFast } from "@/lib/mockHardware";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
+import { mockFreezingTempAt } from "@/lib/mockHardware";
 import { FreezingTempChart } from "@/components/production/FreezingTempChart";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useCompanies } from "@/hooks/useCompanies";
@@ -64,15 +62,6 @@ interface FreezingItem {
 
 export default function ShockFreezingTerminalPage() {
   const navigate = useNavigate();
-
-  // Demo speed flag (localStorage) — toggler dla prezentacji (5 min do -18°C)
-  const [demoSpeed, setDemoSpeed] = useState<boolean>(
-    () => typeof window !== "undefined" && localStorage.getItem("demo_speed") === "fast",
-  );
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    localStorage.setItem("demo_speed", demoSpeed ? "fast" : "real");
-  }, [demoSpeed]);
 
   // Context
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
@@ -275,8 +264,7 @@ export default function ShockFreezingTerminalPage() {
       const startedAtMs = item.startedAt.getTime();
       const id = setInterval(async () => {
         const elapsedSec = (Date.now() - startedAtMs) / 1000;
-        const isFast = typeof window !== "undefined" && localStorage.getItem("demo_speed") === "fast";
-        const mockTemp = isFast ? mockFreezingTempAtFast(elapsedSec) : mockFreezingTempAt(elapsedSec);
+        const mockTemp = mockFreezingTempAt(elapsedSec);
         try {
           const { error: insertErr } = await supabase
             .from("t_freezing_temp_log")
@@ -458,24 +446,7 @@ export default function ShockFreezingTerminalPage() {
 
   return (
     <div className="min-h-screen bg-background pb-[68px]">
-      <TerminalHeader
-        kind="freezing"
-        title="Mrożenie szokowe — CCP"
-        icon={Snowflake}
-        onBack={() => navigate(-1)}
-        right={
-          <div className="flex items-center gap-2 rounded-md bg-white/10 px-3 py-1.5">
-            <Label htmlFor="demo-speed" className="text-xs uppercase tracking-wide cursor-pointer">
-              Demo speed {demoSpeed ? "5 min" : "50 min"}
-            </Label>
-            <Switch
-              id="demo-speed"
-              checked={demoSpeed}
-              onCheckedChange={setDemoSpeed}
-            />
-          </div>
-        }
-      />
+      <TerminalHeader kind="freezing" title="Mrożenie szokowe — CCP" icon={Snowflake} onBack={() => navigate(-1)} />
       <div className="p-4">
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">

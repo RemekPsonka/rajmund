@@ -2044,6 +2044,7 @@ export type Database = {
         Args: { _action: string; _resource: string; _user_id: string }
         Returns: boolean
       }
+      check_trigger_exists: { Args: { trigger_name: string }; Returns: boolean }
       cleanup_demo_data: { Args: never; Returns: Json }
       close_production_order_with_batches: {
         Args: { p_order_id: string }

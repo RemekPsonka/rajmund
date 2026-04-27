@@ -77,7 +77,6 @@ import {
 import { useRecipes, useRecipeIngredients } from "@/hooks/useRecipes";
 import { PROCESSING_DIRECTIONS, type ProcessingDirection } from "@/hooks/useStorageLocations";
 import { cn } from "@/lib/utils";
-import { ScaleDisplay } from "@/components/production/ScaleDisplay";
 
 const MACHINES = [
   { id: "MASOWNICA_1", name: "Masownica 1" },
@@ -657,13 +656,6 @@ export default function TumblerTerminalPage() {
                           decimal={false}
                           maxLength={6}
                           unit="kg"
-                        />
-                        <ScaleDisplay
-                          weight={inputItems.reduce((s, it) => s + (it.weight || 0), 0) || null}
-                          targetKg={targetTotalKg || undefined}
-                          tolerancePct={5}
-                          label="Suma wsadu"
-                          className="md:w-72"
                         />
                       </div>
                     </div>
