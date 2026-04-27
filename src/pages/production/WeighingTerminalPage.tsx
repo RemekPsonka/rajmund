@@ -90,16 +90,14 @@ export default function WeighingTerminalPage() {
   const activeSourceBatchId = inputs && inputs.length > 0 ? inputs[0].batch_id : undefined;
 
   // Mock scale reading
-  const readFromScale = () => {
+  const readFromScale = async () => {
     setIsScaleReading(true);
-    setTimeout(() => {
-      // Simulate weight based on container count (60-80kg per stack of containers)
-      const baseWeight = containerCount * 12;
-      const mockWeight = baseWeight + Math.random() * (containerCount * 3);
-      setWeightGross(Math.round(mockWeight * 100) / 100);
-      setIsScaleReading(false);
-      toast.success("Odczyt z wagi pobrany");
-    }, 800);
+    await sleep(800);
+    // Bazowa waga ~12kg/pojemnik (typowy E2 z mięsem); jitter ±2% via mockScaleRead.
+    const baseWeight = containerCount * 12 + containerCount * 1.5;
+    setWeightGross(mockScaleRead(baseWeight));
+    setIsScaleReading(false);
+    toast.success("Odczyt z wagi pobrany");
   };
 
   // Submit weighing
