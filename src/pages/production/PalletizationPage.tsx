@@ -153,11 +153,33 @@ export default function PalletizationPage() {
     }
   };
 
-  // Print label
+  // Print label — otwiera modal podglądu (audyt loguje się dopiero po kliknięciu DRUKUJ w modalu)
   const handlePrintLabel = () => {
+    if (!selectedPallet) return;
     setShowLabelDialog(true);
-    if (selectedPallet) {
+  };
+
+  // Potwierdzenie wydruku z modala SSCC: wpis do t_print_log + flaga label_printed + toast
+  const handleConfirmPrint = async () => {
+    if (!selectedPallet) return;
+    try {
+      await logPrint.mutateAsync({
+        document_type: "SSCC_LABEL",
+        reference_id: selectedPallet.id,
+        reference_table: "t_handling_units",
+        payload: {
+          sscc: selectedPallet.sscc_number,
+          weight_kg: selectedPallet.total_net_weight,
+          items_count: selectedPallet.items_count,
+          production_date: selectedPallet.production_date,
+        },
+      });
       markLabelPrinted.mutate(selectedPallet.id);
+      window.print();
+      toast.success("Wydrukowano etykietę SSCC");
+      setShowLabelDialog(false);
+    } catch (e: unknown) {
+      toast.error("Nie udało się zarejestrować wydruku");
     }
   };
 
