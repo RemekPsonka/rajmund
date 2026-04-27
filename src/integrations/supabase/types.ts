@@ -1872,6 +1872,10 @@ export type Database = {
         Args: { p_order_id: string }
         Returns: Json
       }
+      close_production_order_with_lineage: {
+        Args: { p_order_id: string }
+        Returns: Json
+      }
       generate_batch_number: { Args: { p_product_id: string }; Returns: string }
       generate_document_number: {
         Args: {

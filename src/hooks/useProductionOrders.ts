@@ -406,7 +406,7 @@ export function useCloseProductionOrder() {
 
   return useMutation({
     mutationFn: async (orderId: string) => {
-      const { data, error } = await supabase.rpc("close_production_order_with_batches", {
+      const { data, error } = await supabase.rpc("close_production_order_with_lineage", {
         p_order_id: orderId,
       });
 
@@ -416,11 +416,17 @@ export function useCloseProductionOrder() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["production-orders"] });
       queryClient.invalidateQueries({ queryKey: ["batches"] });
-      
-      const result = data as { success: boolean; created_batches: { batch_number: string; product_name: string; quantity: number }[] };
-      if (result.created_batches && result.created_batches.length > 0) {
+      queryClient.invalidateQueries({ queryKey: ["lot-lineage"] });
+
+      const result = data as {
+        success: boolean;
+        output_batch_number?: string;
+        total_weight_kg?: number;
+        lineage_entries_created?: number;
+      };
+      if (result?.output_batch_number) {
         toast.success(
-          `Zlecenie zamknięte. Utworzono ${result.created_batches.length} partii wynikowych.`
+          `Zlecenie zamknięte. Partia wynikowa: ${result.output_batch_number} (${result.total_weight_kg} kg)`
         );
       } else {
         toast.success("Zlecenie zamknięte.");
