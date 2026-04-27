@@ -1,65 +1,86 @@
-## Sprint 3.3 — Wykres krzywej temperatury w terminalu mrożenia
+## Sprint 3.4 — Hard gate CCP3 dla paletyzacji
 
-### 1. Nowy komponent `src/components/production/FreezingTempChart.tsx`
+Cel: niemożliwe do obejścia (na poziomie bazy) zamknięcie palety zawierającej partie bez zatwierdzonego mrożenia.
 
-**Props**: `{ productionLogId: string; targetTempC?: number /* -18 */; ambientLine?: boolean; title?: string }`
+### 1. Migracja SQL — funkcja + trigger
 
-**Logika**:
-- Konsumuje `useFreezingTempStream(productionLogId)` z S3.2 → `readings` rośnie automatycznie przez Realtime channel.
-- `useMemo` mapuje pomiary na `{ ts, label: HH:MM, core, ambient, source }`.
-- `last = data[data.length-1]`, `reachedTarget = last.core <= targetTempC`, `remaining = |last.core - targetTempC|`.
-- `yDomain` auto-skalowane z paddingiem (min/max ± 2-3°C, zawsze obejmuje target).
+Plik: `supabase/migrations/<timestamp>_ccp3_enforce.sql`
 
-**Render** (shadcn Card):
-- **CardHeader** — flex split:
-  - Lewo: tytuł `ThermometerSnowflake + "Krzywa temperatury rdzenia"`, podtytuł `Target ≤ -18°C (CCP) · N pomiarów`.
-  - Prawo: duża cyfra `font-mono tabular-nums` `style={{fontSize: 48}}` z `last.core` + `Badge`:
-    - Target osiągnięty → `bg-success text-success-foreground` „OSIĄGNIĘTO TARGET — można zakończyć mrożenie"
-    - W trakcie → `bg-warning text-warning-foreground` „OZIĘBIANIE — pozostało {remaining}°C"
-- **CardContent**:
-  - `isLoading` → `Skeleton h-[300px] w-full`
-  - `data.length === 0` → `EmptyState` z ikoną `ThermometerSnowflake`, tytuł „Oczekiwanie na pierwszy pomiar..."
-  - W innym przypadku `ResponsiveContainer h=300` + `LineChart`:
-    - `CartesianGrid` `hsl(var(--border))`
-    - `XAxis dataKey="label"`, `YAxis domain={yDomain}`, ticki `hsl(var(--muted-foreground))`
-    - `ReferenceLine y={targetTempC}` `stroke=hsl(var(--destructive))`, `strokeDasharray="5 5"`, label „Target -18°C"
-    - `Line dataKey="core"` `stroke=hsl(var(--primary))` `strokeWidth=2`, `isAnimationActive={false}`
-    - **Dot tylko dla ostatnich 3 pomiarów** (custom funkcja zwraca `<circle>` jeśli `index >= data.length-3`, w przeciwnym razie pusty `<g>`)
-    - `activeDot={{ r: 6 }}` na hover
-    - Opcjonalnie `Line dataKey="ambient"` (`ambientLine`) jako szara przerywana
-  - **CustomTooltip**: pokazuje `HH:mm:ss`, „Rdzeń: X°C", opcjonalnie „Otoczenie", „Źródło: auto (sonda) / ręczny"
+```sql
+CREATE OR REPLACE FUNCTION public.enforce_ccp3()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_unfrozen_lots text[];
+BEGIN
+  -- Idempotentnie: jeśli już była Closed, nie blokujemy kolejnych UPDATE
+  IF TG_OP = 'UPDATE' AND OLD.status = 'Closed' THEN
+    RETURN NEW;
+  END IF;
 
-### 2. Wpięcie w `src/pages/production/ShockFreezingTerminalPage.tsx`
+  -- Trigger interesuje nas tylko gdy nowy status = 'Closed'
+  IF NEW.status IS DISTINCT FROM 'Closed' THEN
+    RETURN NEW;
+  END IF;
 
-- Import `FreezingTempChart`.
-- Wybierz **pierwszą aktywną sesję**: `const activeChartItem = freezingItems.find(i => i.status === "freezing" && i.dbLogId)`.
-- Wstaw **powyżej** istniejącej karty z tabelą sesji (przed `<Card>` zawierającym `freezingItems.map`):
-  ```tsx
-  {activeChartItem?.dbLogId && (
-    <FreezingTempChart productionLogId={activeChartItem.dbLogId} targetTempC={CCP_THRESHOLD_C} />
-  )}
-  ```
-- Jeśli kilka aktywnych sesji — pokazujemy tylko pierwszą (selektor odkładamy na S3.4, demo nie potrzebuje).
+  SELECT array_agg(DISTINCT b.internal_batch_number)
+  INTO v_unfrozen_lots
+  FROM t_batches b
+  WHERE b.id IN (
+    SELECT DISTINCT pl.source_batch_id
+    FROM t_production_logs pl
+    WHERE pl.handling_unit_id = NEW.id
+      AND pl.source_batch_id IS NOT NULL
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM t_production_logs pl2
+    WHERE pl2.source_batch_id = b.id
+      AND pl2.freezing_completed_at IS NOT NULL
+      AND pl2.ccp_passed = true
+  );
 
-### 3. Konwencje (potwierdzone w kodzie)
+  IF v_unfrozen_lots IS NOT NULL AND array_length(v_unfrozen_lots, 1) > 0 THEN
+    RAISE EXCEPTION 'CCP3_FAILED: paleta zawiera partie bez zatwierdzonego mrożenia: %',
+      array_to_string(v_unfrozen_lots, ', ');
+  END IF;
 
-- Tokeny istnieją: `--primary`, `--destructive`, `--success`, `--success-foreground`, `--warning`, `--warning-foreground`, `--border`, `--muted-foreground`, `--background`, `--popover`. Wszystko HSL przez `hsl(var(--…))`.
-- shadcn primitives: `Card/CardHeader/CardTitle/CardContent`, `Badge`, `Skeleton`, `EmptyState`.
-- Polish UI strings.
-- Bez dark/light hardcode.
+  RETURN NEW;
+END;
+$$;
 
-### 4. Co świadomie zostawiamy
+CREATE TRIGGER trg_enforce_ccp3
+BEFORE UPDATE ON public.t_handling_units
+FOR EACH ROW
+EXECUTE FUNCTION public.enforce_ccp3();
+```
 
-- **Selektor sesji** gdy >1 aktywna — S3.4.
-- **Eksport krzywej do PDF / raport CCP** — sprint dokumentacyjny.
-- **Hard gate na bazie min temp z całej krzywej** (np. „target musi się utrzymać ≥ X minut") — S3.4.
+### 2. Frontend — czytelny komunikat błędu
 
-### 5. Ryzyka
+Plik: `src/hooks/useHandlingUnits.ts`, mutacja `useUpdateHandlingUnitStatus` (linie ~163–165).
 
-- `Realtime invalidate` powoduje refetch całej historii — przy długiej sesji (>1000 pomiarów) może puchnąć. Na demo i produkcję S3 nie problem (≤ 480 pomiarów / 4h przy interwale 30s). Optymalizacja przyrostowa (cache merge zamiast invalidate) odkładana.
-- Custom `dot` w Recharts musi mieć stabilny `key` — używam `dot-${index}`.
+Zamiana ogólnego `onError` na rozpoznawanie kodu `CCP3_FAILED`:
 
-### Pliki
+```ts
+onError: (error: Error) => {
+  if (error?.message?.includes('CCP3_FAILED')) {
+    const lots = error.message.split(': ').pop();
+    toast.error(
+      `Paleta zawiera partie bez zatwierdzonego mrożenia (${lots}). ` +
+      `Sprawdź sesje mrożenia w terminalu mrożenia przed zamknięciem palety.`
+    );
+  } else {
+    toast.error(`Błąd zamykania palety: ${error.message}`);
+  }
+},
+```
 
-- **Nowy**: `src/components/production/FreezingTempChart.tsx`
-- **Edycja**: `src/pages/production/ShockFreezingTerminalPage.tsx` (import + warunkowe renderowanie wykresu nad tabelą)
+`PalletizationPage.handleClosePallet` już łapie błąd i nie pokazuje sukcesu — bez zmian. Toast sukcesu z hooka usuniemy (lub zostawimy — strona już ma swój `toast.success`); zostawiam logikę bez zmiany (toast hooka pojawi się tylko przy faktycznym sukcesie, czyli gdy gate przepuści).
+
+### Acceptance / test
+1. Partia bez mrożenia → drag na paletę → "Zamknij paletę" → toast PL z listą lotów.
+2. Po wykonaniu mrożenia (-20°C, ccp_passed=true) → ponowne zamknięcie przechodzi.
+3. Próba ręcznego `UPDATE t_handling_units SET status='Closed' ...` w SQL editor również rzuca wyjątek — gate jest w bazie.
+4. Zamknięta już paleta (OLD.status='Closed') może być dalej UPDATE'owana (np. label_printed) bez blokady.

@@ -160,8 +160,15 @@ export function useUpdateHandlingUnitStatus() {
       queryClient.invalidateQueries({ queryKey: ["handling-units"] });
       toast.success("Zaktualizowano status palety");
     },
-    onError: (error) => {
-      toast.error(`Błąd: ${error.message}`);
+    onError: (error: Error) => {
+      if (error?.message?.includes("CCP3_FAILED")) {
+        const lots = error.message.split(": ").pop();
+        toast.error(
+          `Paleta zawiera partie bez zatwierdzonego mrożenia (${lots}). Sprawdź sesje mrożenia w terminalu mrożenia przed zamknięciem palety.`
+        );
+      } else {
+        toast.error(`Błąd zamykania palety: ${error.message}`);
+      }
     },
   });
 }
