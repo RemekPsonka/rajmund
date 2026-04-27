@@ -299,6 +299,35 @@ export function useUpdateShipment() {
       seal_number?: string;
       linked_invoice_number?: string;
     }) => {
+      // Walidacja palet przy zmianie statusu na Shipped
+      if (status === "Shipped") {
+        const { data: items, error: itemsError } = await supabase
+          .from("t_shipment_items")
+          .select("handling_unit:t_handling_units(id, sscc_number, status, label_printed)")
+          .eq("shipment_id", id);
+
+        if (itemsError) throw itemsError;
+
+        const errors: string[] = [];
+        for (const item of items ?? []) {
+          const hu = (item as any).handling_unit;
+          if (!hu) continue;
+          if (!hu.sscc_number) {
+            errors.push(`• Paleta bez SSCC (id: ${hu.id?.slice(0, 8)}…)`);
+          }
+          if (hu.status !== "Closed") {
+            errors.push(`• Paleta ${hu.sscc_number ?? "(brak SSCC)"}: status=${hu.status} (oczekiwane: Closed)`);
+          }
+          if (!hu.label_printed) {
+            console.warn(`Paleta ${hu.sscc_number}: brak wydrukowanej etykiety`);
+          }
+        }
+
+        if (errors.length > 0) {
+          throw new Error(`Wysyłka niekompletna:\n${errors.join("\n")}`);
+        }
+      }
+
       const updateData: Record<string, any> = { updated_at: new Date().toISOString() };
       if (status !== undefined) updateData.status = status;
       if (driver_name !== undefined) updateData.driver_name = driver_name;
@@ -319,8 +348,13 @@ export function useUpdateShipment() {
       queryClient.invalidateQueries({ queryKey: ["shipments"] });
       toast.success("Zaktualizowano wysyłkę");
     },
-    onError: (error) => {
-      toast.error(`Błąd: ${error.message}`);
+    onError: (error: Error) => {
+      if (error.message?.startsWith("Wysyłka niekompletna")) {
+        const lines = error.message.split("\n");
+        toast.error(lines[0], { description: lines.slice(1).join("\n"), duration: 8000 });
+      } else {
+        toast.error(`Błąd: ${error.message}`);
+      }
     },
   });
 }
