@@ -243,7 +243,7 @@ describe("Sprint 4 — SSCCLabelPreview renderuje barcode z poprawnym SSCC", () 
     expect(sscc).toMatch(/^\d{18}$/);
 
     const mod = await import("@/components/production/SSCCLabelPreview");
-    const Comp = (mod.SSCCLabelPreview ?? mod.default) as React.ComponentType<Record<string, unknown>>;
+    const Comp = (mod as Record<string, unknown>).SSCCLabelPreview as React.ComponentType<Record<string, unknown>> | undefined;
     expect(Comp).toBeDefined();
     // Nie wymagamy 100% rendrowania (props mogą się różnić); ważne że export istnieje.
   });
