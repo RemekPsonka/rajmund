@@ -22,6 +22,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumPad } from "@/components/ui/NumPad";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -637,14 +638,23 @@ export default function TumblerTerminalPage() {
                     </div>
                     <div>
                       <label className="text-sm text-muted-foreground mb-2 block">Cel partii (kg)</label>
-                      <Input
-                        type="number"
-                        min={0}
-                        step={1}
-                        className="h-11 text-lg font-mono"
-                        value={targetTotalKg || ""}
-                        onChange={(e) => setTargetTotalKg(Number(e.target.value) || 0)}
-                      />
+                      <div className="flex flex-col md:flex-row md:items-start gap-4">
+                        <Input
+                          type="number"
+                          min={0}
+                          step={1}
+                          className="h-11 text-lg font-mono md:w-48"
+                          value={targetTotalKg || ""}
+                          onChange={(e) => setTargetTotalKg(Number(e.target.value) || 0)}
+                        />
+                        <NumPad
+                          value={targetTotalKg ? String(targetTotalKg) : ""}
+                          onChange={(v) => setTargetTotalKg(Number(v) || 0)}
+                          decimal={false}
+                          maxLength={6}
+                          unit="kg"
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
