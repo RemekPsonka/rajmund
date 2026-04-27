@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Snowflake, User, Scan, Play, Square, Clock, ThermometerSnowflake, AlertTriangle, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ import { pl } from "date-fns/locale";
 
 import { useProductionOrders, useCreateProductionLog, useUpdateProductionLog, useFreezingLogs, generateOrderNumber, useCreateProductionOrder, useCloseProductionOrder } from "@/hooks/useProductionOrders";
 import { supabase } from "@/integrations/supabase/client";
+import { mockFreezingTempAt } from "@/lib/mockHardware";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useCompanies } from "@/hooks/useCompanies";
 import { useFacilities } from "@/hooks/useFacilities";
@@ -235,6 +236,67 @@ export default function ShockFreezingTerminalPage() {
     }
   };
 
+  // === Auto-pomiar temperatury co 30s dla aktywnych sesji mrożenia ===
+  // Krzywa wykładnicza z mockHardware imituje sondę. Wpisy idą do
+  // t_freezing_temp_log (source='auto') + odświeżają latest_core_temp_c
+  // na production_log. Cleanup przy zakończeniu mrożenia / odmontowaniu.
+  const activeFreezingKey = useMemo(
+    () => freezingItems
+      .filter(i => i.status === "freezing" && i.dbLogId)
+      .map(i => `${i.dbLogId}:${i.startedAt.getTime()}`)
+      .join("|"),
+    [freezingItems]
+  );
+
+  useEffect(() => {
+    const active = freezingItems.filter(
+      i => i.status === "freezing" && i.dbLogId
+    );
+    if (active.length === 0) return;
+
+    const intervals: ReturnType<typeof setInterval>[] = [];
+
+    active.forEach(item => {
+      const dbLogId = item.dbLogId!;
+      const startedAtMs = item.startedAt.getTime();
+      const id = setInterval(async () => {
+        const elapsedSec = (Date.now() - startedAtMs) / 1000;
+        const mockTemp = mockFreezingTempAt(elapsedSec);
+        try {
+          const { error: insertErr } = await supabase
+            .from("t_freezing_temp_log")
+            .insert({
+              production_log_id: dbLogId,
+              core_temp_c: mockTemp,
+              source: "auto",
+            });
+          if (insertErr) {
+            console.error("Auto temp log insert error:", insertErr);
+            return;
+          }
+          await updateLog.mutateAsync({
+            id: dbLogId,
+            latest_core_temp_c: mockTemp,
+            silent: true,
+          });
+          setFreezingItems(prev =>
+            prev.map(i =>
+              i.dbLogId === dbLogId ? { ...i, latestTempC: mockTemp } : i
+            )
+          );
+        } catch (err) {
+          console.error("Auto temp poll failed:", err);
+        }
+      }, 30_000);
+      intervals.push(id);
+    });
+
+    return () => {
+      intervals.forEach(clearInterval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFreezingKey]);
+
   // Save temperature reading for an active freezing item
   const handleSaveTemperature = async (itemId: string) => {
     const item = freezingItems.find(i => i.id === itemId);
@@ -257,6 +319,16 @@ export default function ShockFreezingTerminalPage() {
         latest_core_temp_c: value,
         silent: true,
       });
+      // Dorzuć wpis do historii pomiarów (krzywa)
+      const { error: insertErr } = await supabase
+        .from("t_freezing_temp_log")
+        .insert({
+          production_log_id: item.dbLogId,
+          core_temp_c: value,
+          source: "manual",
+        });
+      if (insertErr) console.error("Insert manual temp log error:", insertErr);
+
       setFreezingItems(prev =>
         prev.map(i => i.id === itemId ? { ...i, latestTempC: value } : i)
       );
