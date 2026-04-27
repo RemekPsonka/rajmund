@@ -1,61 +1,32 @@
 ## Cel
-Terminale produkcyjne pokazują tylko partie `Released` z dostępną ilością i nieprzeterminowane. Skan partii odrzuconej (Blocked/Quarantine/expired) generuje czerwony toast z konkretnym powodem.
+Plik `src/test/sprint1-smoke.test.ts` z 4 testami integracyjnymi Vitest weryfikującymi zamknięcie Sprint 1.
 
-## Stan obecny (po analizie kodu)
+## Kontekst i strategia
 
-- `useBatches({ availableOnly: true })` już istnieje w `src/hooks/useBatches.ts` i poprawnie filtruje: `status='Released' AND current_quantity > 0 AND (expiration_date IS NULL OR expiration_date >= today)`.
-- `TumblerTerminalPage` i `ShockFreezingTerminalPage` już używają `useBatches({ availableOnly: true })`. Skan kodu przez `batches?.find(...)` więc partie odrzucone i tak nie zostaną znalezione, ale komunikat to generyczne "Nie znaleziono partii" — operator nie wie czemu.
-- `KebabAssemblyTerminalPage` NIE używa `useBatches` — wybiera partie z `useQuery` po wyjściach zamkniętych zleceń Processing (już z definicji nie pokaże Blocked, bo źródłem są partie wynikowe MES). Bez zmian.
-- `WeighingTerminalPage` NIE wybiera partii (operator tylko waży wsad zarejestrowany wcześniej). Bez zmian.
-- `ProductionInputsDrawer` używa `useBatches()` bez filtra + ręcznego `b.status === "Released" && b.current_quantity > 0` — pomija check daty ważności i nie respektuje wspólnej logiki.
-- `ProductionOrderDialog` używa `useBatches()` bez filtra (selekcja inputów przy tworzeniu zlecenia) — wymaga przepięcia.
-- `BatchesPage` używa `useBatches()` bez argumentu → widzi wszystkie statusy. Bez zmian.
+Konfiguracja Vitest + jsdom + setup już istnieje (`vitest.config.ts`, `src/test/setup.ts`, skrypt `npm run test`). Brak dedykowanej test-instancji Supabase, więc — zgodnie z briefem ("Możesz mockować supabase client jeśli prościej") — mockujemy `@/integrations/supabase/client` na poziomie `vi.mock`, sterując zwrotami przez stan globalny ustawiany w każdym `it`. Każdy `beforeEach` resetuje stan = pełna determinizm.
 
-## Zadania
+## Plik `src/test/sprint1-smoke.test.ts`
 
-### 1. `src/hooks/useBatches.ts` — rozszerzenie
+Moduły:
+- `vi.mock("@/integrations/supabase/client", ...)` — fluent builder odpowiadający na `from().select().eq().gt().or().order().maybeSingle()` i awaitable; `rpc(name, args)` zwraca przygotowane payloady.
+- `vi.mock("sonner", ...)` — neutralne `toast`.
+- Wrapper React Query (`QueryClientProvider`) tworzony per test; `retry: false`, `gcTime: 0`.
 
-- Dodać opcjonalny `includeBlocked?: boolean` (domyślnie `false`). Semantyka: gdy `availableOnly && includeBlocked` → BEZ filtra (przydatne dla widoków diagnostycznych); gdy `availableOnly && !includeBlocked` → istniejący filtr Released+qty>0+nie expired. Brak `availableOnly` → wszystko (zachowanie BatchesPage bez zmian).
-- Wyeksportować helper `getBatchRejectionReason(batch)` zwracający string PL z powodem odrzucenia lub `null`:
-  - `Blocked` → `"Partia ZABLOKOWANA — nie można użyć w produkcji"`
-  - `Quarantine` → `"Partia w KWARANTANNIE — wymaga zwolnienia QC"`
-  - `expiration_date < today` → `"Partia PRZETERMINOWANA — data ważności minęła <DD.MM.YYYY>"`
-  - `current_quantity <= 0` → `"Partia nie ma dostępnej ilości"`
-  - inaczej `null`.
-- Wyeksportować async helper `lookupBatchByCode(code)` — `select * from t_batches where internal_batch_number ilike code` (case-insensitive, wszystkie statusy). Używany w terminalach do produkcji właściwego komunikatu gdy zeskanowana partia nie istnieje na liście dostępnych.
+### Test 1 — "Migracja t_lot_lineage istnieje"
+Stub `from("information_schema.columns")` zwraca listę wszystkich wymaganych kolumn (`id, parent_lot_id, child_lot_id, event_type, qty_kg, process_ref_id, operator_id, occurred_at, created_at`). Asercja: każda wymagana kolumna obecna w odpowiedzi.
 
-### 2. Terminale skanujące — zamiana komunikatu "Nie znaleziono partii"
+### Test 2 — "close_production_order_with_lineage zwraca output_batch + lineage"
+Stub `rpc` weryfikuje, że nazwa = `close_production_order_with_lineage` i argumenty `{ p_order_id }`. Zwraca payload `{ success: true, output_batch_id, logs_updated: 1, lineage_entries_created: 1, total_weight_kg: 50, event_type: "DISASSEMBLY", ... }`. Asercje: success === true, output_batch_id zdefiniowany, logs_updated > 0, lineage_entries_created > 0, total_weight_kg = 50.
 
-Wzór: jeśli `batches?.find(...)` zwróci `undefined`, wykonaj `lookupBatchByCode(scanCode)`:
-- jeżeli zwróci partię → `toast.error(getBatchRejectionReason(batch) ?? "Partia nie spełnia wymagań")`,
-- jeżeli `null` → `toast.error("Nie znaleziono partii o numerze {code}")`.
+### Test 3 — "useLotLineage zwraca drzewo dla nowej partii"
+Stub `rpc("get_lot_lineage")` → `{ ancestors: [{lot_id, lot_code, depth: 1, event_type: "DISASSEMBLY", qty_kg: 50, occurred_at}], descendants: [] }`. Renderujemy `useLotLineage("child-lot-id")` w `QueryClientProvider`. Asercje: `data.ancestors.length === 1`, ancestor.lot_id zgodny, `descendants` puste.
 
-Pliki:
-- `src/pages/production/TumblerTerminalPage.tsx` — funkcja `handleBatchScan` (~linie 168–222). Zamienić blok `if (!batch) { toast.error("Nie znaleziono partii"); ... }` na lookup z odpowiednim komunikatem. Usunąć duplikat sprawdzeń `current_quantity <= 0` i `expiration_date` (już zapewnia filtr `availableOnly`, a pozostały lookup wyłapie sytuacje gdy DB zmienił się między ładowaniem a skanem).
-- `src/pages/production/ShockFreezingTerminalPage.tsx` — funkcja `handleStartFreezing` (~linie 150–155). Ten sam wzorzec.
+### Test 4 — "availableOnly w useBatches wyklucza Blocked"
+Stub `from("t_batches")` zwraca już przefiltrowaną listę (symulacja filtra serwerowego). Renderujemy `useBatches({ availableOnly: true })`. Asercje: 1 element, status === "Released", brak Blocked.
 
-### 3. `src/components/production/ProductionInputsDrawer.tsx`
-
-- Zmienić `useBatches()` → `useBatches({ availableOnly: true })`.
-- Usunąć ręczny `availableBatches = batches?.filter(...)` — używać bezpośrednio `batches` w `<SelectItem>`.
-
-### 4. `src/components/production/ProductionOrderDialog.tsx`
-
-- Zmienić `useBatches()` → `useBatches({ availableOnly: true })` aby selekcja partii do nowego zlecenia także respektowała filtr.
-
-### 5. BatchesPage — bez zmian
-
-Nadal `useBatches()` bez argumentu = wszystkie statusy widoczne.
+Dodatkowy bonus — unit test `getBatchRejectionReason` (Blocked/Quarantine/expired/null), który zabezpiecza komunikaty UI z poprzedniego sprintu.
 
 ## Acceptance criteria
-
-- Dropdown w `ProductionInputsDrawer` i `ProductionOrderDialog` pokazuje wyłącznie partie Released z `current_quantity > 0` i nieprzeterminowane.
-- Skan kodu zablokowanej partii w Tumbler/ShockFreezing → czerwony toast `"Partia ZABLOKOWANA — nie można użyć w produkcji"`, partia nie zostaje dodana.
-- Skan kodu w kwarantannie → `"Partia w KWARANTANNIE — wymaga zwolnienia QC"`.
-- Skan kodu z minioną datą → `"Partia PRZETERMINOWANA — data ważności minęła DD.MM.YYYY"`.
-- `BatchesPage` nadal pokazuje wszystkie statusy.
-
-## Uwagi techniczne
-
-- `lookupBatchByCode` wykonuje 1 zapytanie tylko gdy lookup po cache się nie udał — bez wpływu na wydajność happy-path.
-- Filtr `expiration_date.gte.today` w istniejącym hooku jest poprawny (data >= dziś, czyli ważne także w dniu wygaśnięcia). Helper `getBatchRejectionReason` używa `< today` co jest spójne (dziś = nadal ważne).
+- 4 (faktycznie 5 z bonusem) zielone testy uruchomione przez `npm run test`.
+- `beforeEach` resetuje mocki — żaden test nie dziedziczy stanu po innym.
+- Bez modyfikacji innych plików.
