@@ -33,8 +33,6 @@ import {
 } from "@/hooks/useProductionOrders";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useProducts, type Product } from "@/hooks/useProducts";
-import { useFacilities } from "@/hooks/useFacilities";
-import { useCompanies } from "@/hooks/useCompanies";
 import { KEBAB_WEIGHT_VARIANTS, useCreateKebabVariants } from "@/hooks/useKebabVariants";
 import { cn } from "@/lib/utils";
 
