@@ -591,8 +591,14 @@ export default function NewDeliveryPage() {
                   {contractors?.find((c) => c.id === step1Data.contractor_id)?.name}
                 </Badge>
                 <Badge variant="outline">HDI: {step1Data.external_doc_number || "—"}</Badge>
-                {step1Data.reception_temp && (
-                  <Badge variant="outline">Temp: {step1Data.reception_temp}°C</Badge>
+                {step1Data.received_temp_c !== undefined && (
+                  <Badge
+                    variant="outline"
+                    className={step1Data.received_temp_c > 4 ? "border-destructive text-destructive" : ""}
+                  >
+                    Temp: {step1Data.received_temp_c}°C
+                    {step1Data.received_temp_c > 4 && " ⚠"}
+                  </Badge>
                 )}
               </div>
             </CardContent>
