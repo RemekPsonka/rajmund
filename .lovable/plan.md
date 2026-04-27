@@ -1,86 +1,41 @@
-# Plan: ostrzeżenie o niezakończonej pracy w terminalach MES (Sprint 2.6)
+# Plan: Sprint 2 smoke tests + zamknięcie sprintu
 
 ## Cel
-Operator nie może przypadkiem stracić niezamkniętej partii — przy próbie wyjścia z terminala (sidebar / inne linki / zamknięcie tabu) pojawia się confirm, który NIE blokuje wyjścia, tylko ostrzega.
+Dostarczyć `src/test/sprint2-smoke.test.ts` z 4 testami weryfikującymi domknięcie Sprintu 2, uruchomić go i zamknąć sprint.
 
-## Ograniczenie techniczne
-Projekt używa klasycznego `BrowserRouter` (nie `createBrowserRouter`), więc `useBlocker` z react-router 6.4+ **nie zadziała**. Muszę użyć kombinacji:
-- `beforeunload` — dla zamknięcia tabu / refresh / nawigacji poza appkę
-- globalny capture-phase listener na klikach w `<a>` elementy (sidebar, linki w aplikacji) — przed obsługą routera, z `confirm()`. Jeżeli operator anuluje → `e.preventDefault()` + `e.stopPropagation()`.
+## Strategia
+Identyczna jak `sprint1-smoke.test.ts` (już w repo): mock supabase clienta + `renderHook` z `@testing-library/react`, fabryka `makeBuilder` na łańcuchowy query builder, deterministyczny `beforeEach`. Setup vitest/jsdom już istnieje (`vitest.config.ts`, `src/test/setup.ts`, deps w `package.json`) — nic nie trzeba dodawać.
 
-To rozwiązanie sprawdzone, działa z dowolnym typem routera, nie wymaga refactoru `App.tsx`.
+## 4 testy
 
-## Krok 1 — nowy hook `src/hooks/useUnsavedChangesWarning.ts`
+### 1. „Tumbler emituje LOT po ZAKOŃCZ PARTIĘ" (e2e symulowany)
+- `renderHook(useCloseProductionOrder)` + `mutateAsync(orderId)`.
+- Mock RPC `close_production_order_with_lineage` zwraca `{success, output_batch_id, output_batch_number, lineage_entries_created, event_type:"PROCESSING"}`.
+- Asercje: RPC został wywołany z `{ p_order_id: orderId }`, response zawiera `output_batch_id`.
+- Dodatkowo grep po `TumblerTerminalPage.tsx`: zawiera `closeOrder.mutate(selectedOrderId` oraz tekst „ZAKOŃCZ PARTIĘ" — gwarancja, że UI faktycznie spina hook z buttonem.
 
-```ts
-useUnsavedChangesWarning(isDirty: boolean, message?: string): void
-```
+### 2. „KebabAssembly nie ma hardcoded `finishedProducts[0]`" (grep)
+- `readFileSync` na `KebabAssemblyTerminalPage.tsx`.
+- Negatywne matche: `finishedProducts[0]`, `products[0].id`, `kebabProducts[0]`.
+- Pozytyw: zawiera `setSelectedProduct(` (świadomy wybór).
 
-Logika:
-1. `useEffect` zależny od `isDirty`. Jeśli `false` — zwolnij listenery i wyjdź.
-2. Listener `beforeunload`:
-   - `e.preventDefault()`
-   - `e.returnValue = message` (przeglądarki ignorują custom text — pokażą natywny tekst, ale to OK)
-3. Listener `click` w fazie capture na `document`:
-   - znajdź najbliższy `<a href>` przodek targetu
-   - jeśli to link wewnętrzny (host = window.location.host) i href ≠ aktualny pathname:
-     - `if (!window.confirm(message)) { e.preventDefault(); e.stopPropagation(); }`
-   - linki zewnętrzne pomijamy (obsługa przez `beforeunload`)
-4. Cleanup obu listenerów.
+### 3. „Each terminal renders StateMachineBadge"
+- `it.each` po 4 ścieżkach: Weighing/Tumbler/KebabAssembly/ShockFreezing.
+- Każdy plik MUSI mieć import z `@/components/production/StateMachineBadge` oraz JSX `<StateMachineBadge`.
 
-Domyślny message:
-> „Masz niezakończoną partię. Czy na pewno chcesz wyjść? Postęp zostanie utracony, zlecenie zostanie w bazie ze statusem Open."
+### 4. „ShockFreezing reads existing in-progress logs on mount"
+- `renderHook(useFreezingLogs(facilityId))` z mockiem `t_production_logs` zwracającym 2 logi (jeden z facility=fac-1, drugi z innego).
+- Asercje: hook filtruje po facility_id po stronie klienta → 1 wynik, `process_stage="ShockFreezing"`.
+- Grep po `ShockFreezingTerminalPage.tsx`: zawiera `useFreezingLogs(` oraz `setFreezingItems` — gwarancja, że page hydratuje state na mount.
 
-## Krok 2 — integracja w 4 terminalach
-
-Każdy terminal definiuje własną flagę `isDirty` opartą o lokalny state (przed pierwszym zapisem do DB lub między scan/close):
-
-### `TumblerTerminalPage.tsx`
-```ts
-const isDirty = !!selectedOrderId && (
-  inputItems.length > 0 ||
-  step === "processing" ||
-  step === "output" ||
-  !!selectedRecipeId
-);
-useUnsavedChangesWarning(isDirty);
-```
-
-### `WeighingTerminalPage.tsx`
-```ts
-const isDirty = !!selectedOrderId && (
-  weightGross > 0 ||
-  !!selectedProductId ||
-  !!weighingEmployeeId
-);
-useUnsavedChangesWarning(isDirty);
-```
-
-### `KebabAssemblyTerminalPage.tsx`
-```ts
-const isDirty = !!selectedBatch && (
-  !!createdOrderId ||
-  assembledKebabs.length > 0 ||
-  !!verifiedEmployee
-);
-useUnsavedChangesWarning(isDirty);
-```
-
-### `ShockFreezingTerminalPage.tsx`
-```ts
-const isDirty = freezingItems.length > 0; // każda aktywna sesja mrożenia w UI
-useUnsavedChangesWarning(isDirty);
-```
-(uwaga: dla freezingu sesje są persystowane w DB od Sprintu 2.5, więc warning informuje że odejście pozostawi zlecenia w stanie Open bez decyzji CCP — co jest faktem).
-
-## Krok 3 — Acceptance test
-1. Tumbler → wybierz zlecenie + zeskanuj partię → klik „Magazyn" w sidebarze → confirm.
-2. Anuluj → zostajemy. OK → wychodzimy.
-3. Refresh strony / zamknięcie tabu → natywny browser-confirm.
-4. Brak partii / brak wybranego zlecenia → wyjście bez pytania (no-op).
+## Uruchomienie i domknięcie
+1. `bunx vitest run src/test/sprint2-smoke.test.ts` — wszystkie 4 zielone.
+2. `bunx vitest run` — pełny suite zielony (sprint1 + sprint2 + example).
+3. Update `mem://index.md` + dopisek w `mem://project/modules-roadmap` o domknięciu Sprintu 2 (LOT lineage, recipe validation, CCP gate, state machines, unsaved-warning).
+4. Krótkie podsumowanie dla operatora.
 
 ## Pliki
-- **created**: `src/hooks/useUnsavedChangesWarning.ts`
-- **edited**: 4 strony terminali (1 import + 1-2 linie `isDirty` + 1 linia hook)
+- **created**: `src/test/sprint2-smoke.test.ts`
+- **edited (memory)**: `mem://index.md` z notką „Sprint 2 zamknięty"
 
-Brak migracji, brak nowych zależności, brak zmian w `App.tsx`.
+Brak migracji, brak nowych zależności, brak zmian w kodzie aplikacyjnym.
