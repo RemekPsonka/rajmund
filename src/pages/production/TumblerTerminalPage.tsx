@@ -124,6 +124,9 @@ export default function TumblerTerminalPage() {
   // State - Step (3 steps now)
   const [step, setStep] = useState<"input" | "processing" | "output">("input");
 
+  // Sprint 2: dialog potwierdzenia zakończenia partii tumblera
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
+
   // Queries
   const { data: orders } = useProductionOrders("Open");
   const processingOrders = orders?.filter(o => o.type === "Processing") || [];
