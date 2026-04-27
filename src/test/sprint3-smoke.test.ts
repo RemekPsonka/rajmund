@@ -209,8 +209,8 @@ describe("Sprint 3 — useFreezingTempStream zwraca readings posortowane chronol
       (await import("@/integrations/supabase/client")).supabase,
       "from",
     );
-    spy.mockImplementation((table: string) => {
-      const b = realFrom(table) as unknown as Record<string, AnyFn>;
+    spy.mockImplementation(((table: string) => {
+      const b = (realFrom as unknown as (t: string) => unknown)(table) as Record<string, AnyFn>;
       const origOrder = b.order;
       b.order = vi.fn((...args: unknown[]) => {
         capturedOrderArgs = args;
