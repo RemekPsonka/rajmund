@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Snowflake, User, Scan, Play, Square, Clock, ThermometerSnowflake } from "lucide-react";
+import { ArrowLeft, Snowflake, User, Scan, Play, Square, Clock, ThermometerSnowflake, AlertTriangle, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,7 +24,8 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 
-import { useProductionOrders, useCreateProductionLog, useUpdateProductionLog, useFreezingLogs, generateOrderNumber, useCreateProductionOrder } from "@/hooks/useProductionOrders";
+import { useProductionOrders, useCreateProductionLog, useUpdateProductionLog, useFreezingLogs, generateOrderNumber, useCreateProductionOrder, useCloseProductionOrder } from "@/hooks/useProductionOrders";
+import { supabase } from "@/integrations/supabase/client";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useCompanies } from "@/hooks/useCompanies";
 import { useFacilities } from "@/hooks/useFacilities";
@@ -39,6 +40,8 @@ const FREEZING_CHAMBERS = [
   { id: "chamber-3", name: "Komora 3 (-40°C)" },
 ];
 
+const CCP_THRESHOLD_C = -18;
+
 interface FreezingItem {
   id: string;
   batchNumber: string;
@@ -46,7 +49,10 @@ interface FreezingItem {
   weight: number;
   startedAt: Date;
   status: "freezing" | "completed";
-  dbLogId?: string; // ID from database
+  dbLogId?: string;
+  productionOrderId?: string;
+  latestTempC?: number | null;
+  ccpPassed?: boolean | null;
 }
 
 export default function ShockFreezingTerminalPage() {
@@ -78,6 +84,10 @@ export default function ShockFreezingTerminalPage() {
   const createLog = useCreateProductionLog();
   const updateLog = useUpdateProductionLog();
   const createOrder = useCreateProductionOrder();
+  const closeOrder = useCloseProductionOrder();
+
+  // Local input state for temperature reading per item
+  const [tempInputs, setTempInputs] = useState<Record<string, string>>({});
 
   // Load existing freezing logs from DB when facility changes
   useEffect(() => {
@@ -92,6 +102,9 @@ export default function ShockFreezingTerminalPage() {
           startedAt: new Date(log.freezing_started_at || log.created_at),
           status: "freezing" as const,
           dbLogId: log.id,
+          productionOrderId: log.production_order_id,
+          latestTempC: log.latest_core_temp_c ?? null,
+          ccpPassed: log.ccp_passed ?? null,
         }));
       
       // Merge with local items (avoid duplicates)
@@ -207,6 +220,9 @@ export default function ShockFreezingTerminalPage() {
         startedAt: new Date(),
         status: "freezing",
         dbLogId: logResult.id,
+        productionOrderId: freezingOrder.id,
+        latestTempC: null,
+        ccpPassed: null,
       };
 
       setFreezingItems(prev => [...prev, newItem]);
@@ -218,33 +234,100 @@ export default function ShockFreezingTerminalPage() {
     }
   };
 
-  // Complete freezing for an item
+  // Save temperature reading for an active freezing item
+  const handleSaveTemperature = async (itemId: string) => {
+    const item = freezingItems.find(i => i.id === itemId);
+    if (!item || !item.dbLogId) return;
+
+    const raw = (tempInputs[itemId] ?? "").trim().replace(",", ".");
+    const value = Number(raw);
+    if (raw === "" || Number.isNaN(value)) {
+      toast.error("Wprowadź poprawną wartość temperatury");
+      return;
+    }
+    if (value < -50 || value > 30) {
+      toast.error("Temperatura poza zakresem (-50 do 30°C)");
+      return;
+    }
+
+    try {
+      await updateLog.mutateAsync({
+        id: item.dbLogId,
+        latest_core_temp_c: value,
+        silent: true,
+      });
+      setFreezingItems(prev =>
+        prev.map(i => i.id === itemId ? { ...i, latestTempC: value } : i)
+      );
+      setTempInputs(prev => ({ ...prev, [itemId]: "" }));
+      toast.success(`Zapisano temp.: ${value}°C`);
+    } catch (error) {
+      console.error("Save temperature error:", error);
+    }
+  };
+
+  // Complete freezing — CCP gate decides whether to emit LOT
   const handleCompleteFreezing = async (itemId: string) => {
     const item = freezingItems.find(i => i.id === itemId);
     if (!item) return;
 
+    if (item.latestTempC == null) {
+      toast.error("Najpierw wpisz temperaturę rdzenia");
+      return;
+    }
+
     const duration = Math.round((Date.now() - item.startedAt.getTime()) / 60000);
     const now = new Date().toISOString();
+    const passed = item.latestTempC <= CCP_THRESHOLD_C;
 
     try {
       if (item.dbLogId) {
-        // Update in database
         await updateLog.mutateAsync({
           id: item.dbLogId,
           freezing_completed_at: now,
           freezing_duration_minutes: duration,
+          ccp_passed: passed,
+          silent: true,
         });
       }
 
-      setFreezingItems(prev => 
-        prev.map(i => 
-          i.id === itemId 
-            ? { ...i, status: "completed" as const }
+      if (passed && item.productionOrderId) {
+        // Emit LOT via lineage RPC
+        try {
+          await closeOrder.mutateAsync(item.productionOrderId);
+          toast.success(`Mrożenie zakończone — LOT wyemitowany (${item.batchNumber})`);
+        } catch (e) {
+          // close RPC może wymagać innych warunków — pokaż błąd ale nie wycofuj zamknięcia loga
+          console.error("Close order failed:", e);
+          toast.warning(`Mrożenie zamknięte, ale nie udało się wyemitować LOT-u: ${(e as Error).message}`);
+        }
+      } else if (!passed && item.productionOrderId) {
+        // Append note to order, leave Open for QC
+        try {
+          const { data: order } = await supabase
+            .from("t_production_orders")
+            .select("notes")
+            .eq("id", item.productionOrderId)
+            .single();
+          const stamp = `[QC ${format(new Date(), "yyyy-MM-dd HH:mm")}] Mrożenie ${item.batchNumber}: temp ${item.latestTempC}°C nie spełnia CCP (${CCP_THRESHOLD_C}°C)`;
+          const newNotes = order?.notes ? `${order.notes}\n${stamp}` : stamp;
+          await supabase
+            .from("t_production_orders")
+            .update({ notes: newNotes })
+            .eq("id", item.productionOrderId);
+        } catch (e) {
+          console.error("Note append failed:", e);
+        }
+        toast.warning(`Wymaga decyzji QC — temp ${item.latestTempC}°C > ${CCP_THRESHOLD_C}°C. Zlecenie pozostaje otwarte.`);
+      }
+
+      setFreezingItems(prev =>
+        prev.map(i =>
+          i.id === itemId
+            ? { ...i, status: "completed" as const, ccpPassed: passed }
             : i
         )
       );
-
-      toast.success(`Zakończono mrożenie: ${item.batchNumber} (${duration} min)`);
       refetchFreezingLogs();
     } catch (error) {
       console.error("Freezing complete error:", error);
@@ -487,24 +570,40 @@ export default function ShockFreezingTerminalPage() {
                       <TableHead>Nr Partii</TableHead>
                       <TableHead>Produkt</TableHead>
                       <TableHead className="text-right">Waga</TableHead>
-                      <TableHead>Czas mrożenia</TableHead>
+                      <TableHead>Czas</TableHead>
+                      <TableHead>Temp. rdzenia (°C)</TableHead>
+                      <TableHead className="text-center">CCP</TableHead>
                       <TableHead className="text-right">Akcja</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {freezingItems.map(item => (
-                      <TableRow key={item.id}>
+                    {freezingItems.map(item => {
+                      const isFailed = item.status === "completed" && item.ccpPassed === false;
+                      const tempColor =
+                        item.latestTempC == null
+                          ? "text-muted-foreground"
+                          : item.latestTempC <= CCP_THRESHOLD_C
+                            ? "text-blue-500"
+                            : "text-destructive";
+                      return (
+                      <TableRow key={item.id} className={isFailed ? "border-l-4 border-destructive bg-destructive/5" : ""}>
                         <TableCell>
-                          <Badge 
-                            variant={item.status === "freezing" ? "default" : "secondary"}
-                            className={item.status === "freezing" ? "bg-blue-500" : ""}
-                          >
-                            {item.status === "freezing" ? (
-                              <><Snowflake className="h-3 w-3 mr-1 animate-pulse" /> Mrożenie</>
-                            ) : (
-                              "Zakończone"
-                            )}
-                          </Badge>
+                          {isFailed ? (
+                            <Badge variant="destructive">
+                              <AlertTriangle className="h-3 w-3 mr-1" /> Wymaga QC
+                            </Badge>
+                          ) : (
+                            <Badge
+                              variant={item.status === "freezing" ? "default" : "secondary"}
+                              className={item.status === "freezing" ? "bg-blue-500" : ""}
+                            >
+                              {item.status === "freezing" ? (
+                                <><Snowflake className="h-3 w-3 mr-1 animate-pulse" /> Mrożenie</>
+                              ) : (
+                                "Zakończone"
+                              )}
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell className="font-mono">{item.batchNumber}</TableCell>
                         <TableCell>{item.productName}</TableCell>
@@ -517,12 +616,61 @@ export default function ShockFreezingTerminalPage() {
                             {getDuration(item.startedAt)}
                           </div>
                         </TableCell>
+                        <TableCell>
+                          {item.status === "freezing" ? (
+                            <div className="flex flex-col gap-1">
+                              <div className="flex gap-1 items-center">
+                                <Input
+                                  type="number"
+                                  step="0.1"
+                                  placeholder="np. -20"
+                                  className="h-9 w-24 font-mono"
+                                  value={tempInputs[item.id] ?? ""}
+                                  onChange={(e) => setTempInputs(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                  onKeyDown={(e) => e.key === "Enter" && handleSaveTemperature(item.id)}
+                                />
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleSaveTemperature(item.id)}
+                                  disabled={updateLog.isPending}
+                                >
+                                  <Save className="h-3 w-3" />
+                                </Button>
+                              </div>
+                              {item.latestTempC != null && (
+                                <span className={`text-xs font-mono ${tempColor}`}>
+                                  ostatnio: {item.latestTempC}°C
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className={`font-mono ${tempColor}`}>
+                              {item.latestTempC != null ? `${item.latestTempC}°C` : "—"}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {item.status === "completed" ? (
+                            item.ccpPassed === true ? (
+                              <Badge className="bg-success text-success-foreground">PASS</Badge>
+                            ) : item.ccpPassed === false ? (
+                              <Badge variant="destructive">FAIL</Badge>
+                            ) : (
+                              <Badge variant="outline">—</Badge>
+                            )
+                          ) : (
+                            <Badge variant="outline">—</Badge>
+                          )}
+                        </TableCell>
                         <TableCell className="text-right">
                           {item.status === "freezing" && (
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => handleCompleteFreezing(item.id)}
+                              disabled={item.latestTempC == null}
+                              title={item.latestTempC == null ? "Najpierw wpisz temperaturę" : ""}
                             >
                               <Square className="h-4 w-4 mr-1" />
                               Zakończ
@@ -530,7 +678,8 @@ export default function ShockFreezingTerminalPage() {
                           )}
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               )}
