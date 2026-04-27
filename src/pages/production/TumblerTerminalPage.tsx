@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   RotateCcw,
   AlertCircle,
+  AlertTriangle,
   Plus,
   Trash2,
   Cog,
@@ -15,6 +16,7 @@ import {
   Play,
   ChefHat,
   CheckCircle2,
+  Circle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -84,6 +86,7 @@ const OUTPUT_DIRECTIONS = [
 ];
 
 const TARE_DEFAULT = 2.0;
+const RECIPE_TOLERANCE_PERCENT = 5;
 
 interface InputItem {
   id: string;
@@ -115,6 +118,7 @@ export default function TumblerTerminalPage() {
   
   // State - Processing (Start procesu)
   const [selectedRecipeId, setSelectedRecipeId] = useState("");
+  const [targetTotalKg, setTargetTotalKg] = useState<number>(100);
   
   // State - Output (Wyjście)
   const [selectedProductId, setSelectedProductId] = useState("");
@@ -367,12 +371,8 @@ export default function TumblerTerminalPage() {
   // Sprint 2: warunki zakończenia partii tumblera
   const hasInputs = (existingInputs?.length ?? 0) > 0;
   const hasPostWeight = existingLogs?.some(l => Number(l.weight_gross) > 0) ?? false;
-  const canFinish = hasInputs && hasPostWeight;
-  const finishDisabledReason = !hasInputs
-    ? "Brak wsadu — zeskanuj partię"
-    : !hasPostWeight
-      ? "Brak wagi po-procesowej — zaloguj wagę przed zamknięciem"
-      : null;
+  // recipeCheck zdefiniowany niżej; tu deklarujemy placeholder typowo:
+  // walidację zgodności z recepturą obliczamy w `recipeOk` pod useMemo recipeCheck.
 
   const handleConfirmFinish = () => {
     if (!selectedOrderId) return;
@@ -412,6 +412,47 @@ export default function TumblerTerminalPage() {
       isInvalid,
     };
   }, [selectedRecipe, recipeIngredients]);
+
+  // Sprint: walidacja zgodności wsadu z recepturą (±5% per składnik)
+  const recipeCheck = useMemo(() => {
+    if (!selectedRecipeId || !recipeIngredients?.length) {
+      return { active: false, ok: true, perIngredient: [] as Array<{
+        id: string; name: string; role: string; required: number; actual: number; inTol: boolean;
+      }> };
+    }
+    const sumRatio = recipeIngredients.reduce(
+      (s, i) => s + (Number(i.amount_per_kg_base) || Number(i.ratio) || 0),
+      0
+    ) || 1;
+    const perIngredient = recipeIngredients.map((ing) => {
+      const raw = Number(ing.amount_per_kg_base) || Number(ing.ratio) || 0;
+      const required = (targetTotalKg || 0) * (raw / sumRatio);
+      const actual = inputItems
+        .filter((it) => it.productId === ing.product_id)
+        .reduce((s, it) => s + it.weight, 0);
+      const tolerance = required * (RECIPE_TOLERANCE_PERCENT / 100);
+      const inTol = required > 0 ? Math.abs(actual - required) <= tolerance : actual === 0;
+      return {
+        id: ing.id,
+        name: ing.product?.name || "—",
+        role: ing.role || "MEAT",
+        required,
+        actual,
+        inTol,
+      };
+    });
+    return { active: true, ok: perIngredient.every((p) => p.inTol), perIngredient };
+  }, [selectedRecipeId, recipeIngredients, inputItems, targetTotalKg]);
+
+  const recipeOk = !recipeCheck.active || recipeCheck.ok;
+  const canFinish = hasInputs && hasPostWeight && recipeOk;
+  const finishDisabledReason = !hasInputs
+    ? "Brak wsadu — zeskanuj partię"
+    : !hasPostWeight
+      ? "Brak wagi po-procesowej — zaloguj wagę przed zamknięciem"
+      : !recipeOk
+        ? "Wsad niezgodny z recepturą — sprawdź składniki (±5%)"
+        : null;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -546,8 +587,105 @@ export default function TumblerTerminalPage() {
           </div>
         ) : step === "input" ? (
           /* Step 1: Input (Wsad) */
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Employee + Scan */}
+          <div className="space-y-6">
+            {/* Recipe Selection - na samej górze, przed wyborem partii */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ChefHat className="h-5 w-5" />
+                  Receptura i cel produkcji
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {!recipes || recipes.length === 0 ? (
+                  <div className="flex items-start gap-3 rounded-md border border-warning bg-warning/10 p-3">
+                    <AlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+                    <div className="text-sm">
+                      <p className="font-medium">Brak zdefiniowanej receptury</p>
+                      <p className="text-muted-foreground">
+                        Możesz kontynuować w trybie ręcznym, ale system nie sprawdzi czy wszystko się zgadza.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="md:col-span-2">
+                      <label className="text-sm text-muted-foreground mb-2 block">Receptura</label>
+                      <Select value={selectedRecipeId} onValueChange={setSelectedRecipeId}>
+                        <SelectTrigger className="h-11">
+                          <SelectValue placeholder="Wybierz recepturę..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {recipes.map((recipe) => (
+                            <SelectItem key={recipe.id} value={recipe.id}>
+                              {recipe.name}
+                              {recipe.product?.name && ` → ${recipe.product.name}`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-sm text-muted-foreground mb-2 block">Cel partii (kg)</label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={1}
+                        className="h-11 text-lg font-mono"
+                        value={targetTotalKg || ""}
+                        onChange={(e) => setTargetTotalKg(Number(e.target.value) || 0)}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Tabela składników: Wymagane / Aktualne / Status */}
+                {recipeCheck.active && recipeCheck.perIngredient.length > 0 && (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Składnik</TableHead>
+                          <TableHead>Rola</TableHead>
+                          <TableHead className="text-right">Wymagane (kg)</TableHead>
+                          <TableHead className="text-right">Aktualne (kg)</TableHead>
+                          <TableHead className="text-center w-20">Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {recipeCheck.perIngredient.map((p) => (
+                          <TableRow key={p.id}>
+                            <TableCell className="font-medium">{p.name}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-xs">{p.role}</Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-mono">{p.required.toFixed(2)}</TableCell>
+                            <TableCell className="text-right font-mono">{p.actual.toFixed(2)}</TableCell>
+                            <TableCell className="text-center">
+                              {p.inTol ? (
+                                <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-success/20">
+                                  <Circle className="h-3 w-3 fill-success text-success" />
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-destructive/20">
+                                  <Circle className="h-3 w-3 fill-destructive text-destructive" />
+                                </span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    <div className="px-4 py-2 text-xs text-muted-foreground border-t">
+                      Tolerancja ±{RECIPE_TOLERANCE_PERCENT}%. Zamknięcie partii zablokowane dopóki wszystkie składniki nie są w tolerancji.
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Employee + Scan */}
             <div className="space-y-4">
               {/* Employee Login */}
               <Card>
@@ -693,6 +831,7 @@ export default function TumblerTerminalPage() {
                 )}
               </CardContent>
             </Card>
+            </div>
           </div>
         ) : step === "processing" ? (
           /* Step 2: Processing - Recipe Selection */

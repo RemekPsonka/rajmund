@@ -20,6 +20,8 @@ export interface Recipe {
   base_product?: { name: string; sku: string | null } | null;
 }
 
+export type RecipeIngredientRole = "MEAT" | "SPICE" | "WATER" | "OTHER";
+
 export interface RecipeIngredient {
   id: string;
   recipe_id: string;
@@ -27,6 +29,7 @@ export interface RecipeIngredient {
   ratio: number;
   unit: string;
   amount_per_kg_base: number | null;
+  role: RecipeIngredientRole;
   created_at: string;
   // Joined
   product?: { name: string; sku: string | null; unit: string };
@@ -133,7 +136,7 @@ export function useSaveRecipeWithIngredients() {
       existingRecipeId,
     }: {
       recipe: RecipeFormData;
-      ingredients: { product_id: string; amount_per_kg_base: number; unit: string }[];
+      ingredients: { product_id: string; amount_per_kg_base: number; unit: string; role?: RecipeIngredientRole }[];
       existingRecipeId?: string;
     }) => {
       let recipeId = existingRecipeId;
@@ -172,6 +175,7 @@ export function useSaveRecipeWithIngredients() {
           ratio: ing.amount_per_kg_base, // Keep ratio for backwards compatibility
           amount_per_kg_base: ing.amount_per_kg_base,
           unit: ing.unit,
+          role: ing.role ?? "MEAT",
         }));
 
         const { error } = await supabase

@@ -1,117 +1,88 @@
-# Sprint: State Machine Badge w terminalach produkcyjnych
+# Sprint: Walidacja receptury w Tumblerze
 
 ## Cel
-Każdy z 4 terminali (Weighing, Tumbler, KebabAssembly, ShockFreezing) pokazuje operatorowi gdzie jest w procesie. Tumbler i Freezing dodatkowo pokazują timer w bieżącym stanie.
+Operator masowni widzi recepturę i jej składniki w czasie rzeczywistym; "ZAKOŃCZ PARTIĘ" wymaga zgodności wsadu z recepturą (±5% per składnik).
 
-## Pliki do utworzenia
+## Decyzje vs. brief
 
-### 1. `src/lib/stateMachines.ts`
-Jedno źródło prawdy dla 4 maszyn stanów (literal tuples → typed unions):
+1. **Wybór receptury "przed wyborem partii"** — w briefie. Kontra: obecny flow Tumblera ma 3 stepy (input → processing → output), gdzie receptura jest wybierana w step 2. Przeniesienie na sam początek wymaga refactoru wszystkich 3 stepów, dodatkowo robocze: receptura często ZALEŻY od dostępnych partii surowca, nie odwrotnie. **Decyzja: dodaję selektor receptury jako nową sekcję NA SAMEJ GÓRZE step "input"** (nad logowaniem pracownika), co semantycznie spełnia "przed wyborem partii", a fizycznie nie wywraca flowa.
+2. **`role` w `t_recipe_ingredients`** — brak w schemacie, dodaję migracją (text NOT NULL DEFAULT 'MEAT'). Wartości: `MEAT | SPICE | WATER | OTHER`. Domyślnie wszystkie istniejące → 'MEAT' (zgodnie z briefem).
+3. **`stage` w `t_recipes`** — nie istnieje, brief pisze "jeśli mają jakieś pole stage" — pomijam filtr, lista pokazuje wszystkie aktywne receptury company.
+4. **Tolerancja ±5%** — UI-side stała `RECIPE_TOLERANCE_PERCENT = 5`.
+5. **Mapowanie partii → role** — partia ma produkt; produkt ma `industry_category`. W tabeli "Aktualne" sumuję `inputItems` po `role` składnika. **Mapowanie**: dla każdego `inputItem` szukam matchującego `recipe_ingredient` po `product_id` (1:1) i sumuję wagę; jeśli partia jest produktem spoza receptury — NIE liczy się jako żaden składnik (operator widzi to w toaście "Partia X nie jest składnikiem receptury"). Bez heurystyki "MEAT/SPICE/WATER" przy skanowaniu — to wynika z product_id składnika.
+6. **`target_total_kg`** — nowy lokalny state w komponencie (Input number, default 100). Wymagana ilość per składnik = `target_total_kg * (ratio_normalized)`, gdzie ratio_normalized to `amount_per_kg_base / sum(amount_per_kg_base)` — bo brief wprost mówi "mięso 80%, przyprawa 5%, woda 15%" jako PROCENTY. Receptura w bazie trzyma to jako raw `amount_per_kg_base`, normalizujemy do 100% sumy.
 
-```ts
-export const STATE_MACHINES = {
-  weighing:  ['Pending','Tare_Read','Gross_Read','Confirmed','Transferred'],
-  tumbling:  ['Idle','Loading','Loaded','Mixing','Resting','Done','Discharging','Closed'],
-  assembly:  ['Setup','Producing','Quality_Check','Done','Labeled','Closed'],
-  freezing:  ['Loading','Freezing','Stabilizing','Verified','Released'],
-} as const;
+## Pliki
 
-export type WeighingState = typeof STATE_MACHINES.weighing[number];
-export type TumblingState = typeof STATE_MACHINES.tumbling[number];
-export type AssemblyState = typeof STATE_MACHINES.assembly[number];
-export type FreezingState = typeof STATE_MACHINES.freezing[number];
+### 1. `supabase/migrations/<timestamp>_add_role_to_recipe_ingredients.sql` (nowy)
+```sql
+ALTER TABLE public.t_recipe_ingredients
+  ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'MEAT';
+
+COMMENT ON COLUMN public.t_recipe_ingredients.role IS
+  'Rola składnika w recepturze: MEAT | SPICE | WATER | OTHER. Wpływa na walidacje wsadu.';
+
+-- Trigger walidujący wartości (CHECK constraint nie używamy zgodnie ze standardem projektu)
+CREATE OR REPLACE FUNCTION public.validate_recipe_ingredient_role()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.role NOT IN ('MEAT','SPICE','WATER','OTHER') THEN
+    RAISE EXCEPTION 'Invalid recipe ingredient role: %', NEW.role;
+  END IF;
+  RETURN NEW;
+END $$;
+
+DROP TRIGGER IF EXISTS trg_validate_recipe_ingredient_role ON public.t_recipe_ingredients;
+CREATE TRIGGER trg_validate_recipe_ingredient_role
+  BEFORE INSERT OR UPDATE ON public.t_recipe_ingredients
+  FOR EACH ROW EXECUTE FUNCTION public.validate_recipe_ingredient_role();
 ```
 
-Dodatkowo etykiety PL (system jest po polsku — patrz Core memory) jako mapa `STATE_LABELS_PL` per maszyna; badge renderuje labelkę PL, ale logika operuje na technicznych stanach.
+### 2. `src/hooks/useRecipes.ts` (edit)
+- `RecipeIngredient`: dodać `role: 'MEAT' | 'SPICE' | 'WATER' | 'OTHER'`.
+- `useSaveRecipeWithIngredients`: rozszerzyć ingredient mapping o `role` (default 'MEAT' jeśli niepodane — żeby istniejące formularze receptur nie wybuchły).
 
-### 2. `src/components/production/StateMachineBadge.tsx`
-Reusable stepper. Props:
-```ts
-{
-  states: readonly string[];
-  current: string;
-  labels?: Record<string, string>;   // opcjonalna mapa PL
-  timer?: { stateStartedAt: number } // tylko dla Tumbler/Freezing
-}
-```
+### 3. `src/pages/production/TumblerTerminalPage.tsx` (edit)
+- **Nowy state**: `targetTotalKg` (number, default 100).
+- **Move state hoist**: `selectedRecipeId` już jest, używam go też w step "input".
+- **Nowa sekcja na górze step="input"** — `Card` z:
+  - `Select` receptur (lista z `recipes` filtrowane po `selectedOrder.company_id`).
+  - `Input number` "Cel kg" (`targetTotalKg`).
+  - Jeśli `recipes?.length === 0`: żółty alert "Brak zdefiniowanej receptury. Możesz kontynuować w trybie ręcznym, ale system nie sprawdzi zgodności."
+  - Jeśli wybrana: tabela składników z 4 kolumnami: Nazwa | Wymagane | Aktualne | Status (zielona/czerwona kropka).
+- **Logika walidacji** (`useMemo`):
+  ```ts
+  const recipeCheck = useMemo(() => {
+    if (!selectedRecipeId || !recipeIngredients?.length) return { ok: true, perIngredient: [] };
+    const sumRatio = recipeIngredients.reduce((s,i)=>s+(Number(i.amount_per_kg_base)||0),0) || 1;
+    const perIngredient = recipeIngredients.map(ing => {
+      const required = targetTotalKg * (Number(ing.amount_per_kg_base)||0) / sumRatio;
+      const actual = inputItems
+        .filter(it => it.productId === ing.product_id)
+        .reduce((s,it)=>s+it.weight,0);
+      const tol = required * (RECIPE_TOLERANCE_PERCENT/100);
+      const inTol = Math.abs(actual - required) <= tol;
+      return { ing, required, actual, inTol };
+    });
+    return { ok: perIngredient.every(p=>p.inTol), perIngredient };
+  }, [selectedRecipeId, recipeIngredients, inputItems, targetTotalKg]);
+  ```
+- **Rozszerz `canFinish`**: `canFinish = hasInputs && hasPostWeight && recipeCheck.ok`. Jeśli `selectedRecipeId === ""` (manual mode) — `recipeCheck.ok = true` (pomijamy walidację, bo operator świadomie pracuje bez receptury — patrz alert).
+- **`finishDisabledReason`**: dodaj wariant "Wsad niezgodny z recepturą — sprawdź składniki".
+- **Bez zmian w istniejącym step 2 (`processing`)** — pozostaje jako podsumowanie/uzysk; selektor receptury tam nadal działa, ale jest zsynchronizowany przez `selectedRecipeId`.
 
-Render: poziomy rząd pillsów (flex, wrap), separator chevron między nimi.
-- przeszłe: `bg-muted text-muted-foreground` + ikona `Check` (lucide)
-- aktywny: `bg-primary text-primary-foreground` + opcjonalny timer "MM:SS" w pillu
-- przyszłe: `bg-muted/40 text-muted-foreground/60`
-- responsywne: na sm- ukrywamy ikony chevron, na xs- skracamy do "current / total" jako fallback
+## Acceptance check
+1. Operator wchodzi w step "input" → widzi sekcję "Receptura" jako pierwszą kartę. ✅
+2. Brak receptur → żółty alert. ✅
+3. Wybór receptury 80%/15%/5% + target 100kg → tabela: Mięso wymag.=80, Przyprawa wymag.=5, Woda wymag.=15. Aktualne = 0. Statusy czerwone. ✅
+4. Skanowanie partii sumuje się po `product_id` w kolumnie "Aktualne". 78/16/4.5 → wszystkie zielone. ✅
+5. ZAKOŃCZ PARTIĘ disabled przy 50kg mięsa, enabled przy 78kg. ✅
+6. Tooltip pokazuje powód blokady. ✅
 
-Timer: wewnętrzny `useEffect` z `setInterval(1000)` aktualizujący sformatowany string `mm:ss` (lub `hh:mm:ss` po godzinie) — czyści interwał w cleanup.
+## Pliki dotykane
+- `supabase/migrations/<ts>_add_role_to_recipe_ingredients.sql` (nowy)
+- `src/hooks/useRecipes.ts` (rozszerzenie typu + insert)
+- `src/pages/production/TumblerTerminalPage.tsx` (nowa sekcja + walidacja)
 
-## Mapowanie UI → state per terminal
-
-### Weighing (`WeighingTerminalPage.tsx`)
-Derivacja stanu z istniejącego state'u komponentu:
-- `Pending` — brak `selectedOrderId` lub brak `weighingEmployeeId`
-- `Tare_Read` — operator + zlecenie, `containerCount > 0`, `weightGross == 0`
-- `Gross_Read` — `weightGross > 0`, jeszcze nie zapisano
-- `Confirmed` — po `createLog.isSuccess` (flag z mutacji albo po prostu `logs.length > 0` w bieżącej sesji)
-- `Transferred` — gdy zlecenie ma `status='Closed'` (z bazy)
-
-### Tumbler (`TumblerTerminalPage.tsx`)
-Mapuję na istniejący `step` + dane:
-- `Idle` — brak `selectedOrderId`
-- `Loading` — `step === 'input'` i `inputItems.length > 0`
-- `Loaded` — `step === 'processing'` (po Save inputs)
-- `Mixing` — `step === 'output'` i brak logów wagowych (operator masuje)
-- `Resting` — heurystyka: brak — pomijam pierwsza wersja zostawi tylko `Mixing → Done` (bo UI nie ma osobnego "rest"); dokumentuję w komentarzu, że Resting/Discharging to placeholdery przyszłej rozbudowy hardware
-- `Done` — `step === 'output'` i `existingLogs.length > 0` (jest waga po-procesowa)
-- `Closed` — order.status === 'Closed' (po RPC)
-
-Timer: `stateStartedAt` jako `useState<number>(Date.now())` resetowany w `useEffect([currentState])`.
-
-### KebabAssembly (`KebabAssemblyTerminalPage.tsx`)
-- `Setup` — brak `selectedProduct` lub brak `selectedBatch` lub brak `verifiedEmployee`
-- `Producing` — `canAssemble === true`, `assembledKebabs.length === 0`
-- `Quality_Check` — `assembledKebabs.length > 0`, brak akcji "Zakończ"
-- `Done` — po klikniecie "Zakończ partię" (lokalny flag) — jeśli nie istnieje, pomijam i mapuję tylko na Closed
-- `Labeled` — gdy etykieta wydrukowana (jeśli flow istnieje; inaczej skip)
-- `Closed` — order zamknięty
-
-(Pierwsza iteracja: `Setup → Producing → Quality_Check → Closed`, pozostałe stany pozostają w definicji ale bez triggerów. To jest OK, bo akceptacja mówi "Każdy terminal ma własną logikę mapowania".)
-
-### ShockFreezing (`ShockFreezingTerminalPage.tsx`)
-- `Loading` — `canOperate === false` lub brak `freezingItems`
-- `Freezing` — `activeCount > 0`
-- `Stabilizing` — wszystkie `completed` (activeCount=0, completedCount>0) — czeka na weryfikację
-- `Verified` — placeholder (na razie nieosiągalny bez UI weryfikacji)
-- `Released` — placeholder
-
-Timer: liczony od momentu wejścia w bieżący stan (lokalny `useState`).
-
-## Edycje w terminalach (po jednym patchu na plik)
-
-Każdy plik:
-1. Import: `StateMachineBadge`, `STATE_MACHINES`, etykiety PL.
-2. `useMemo` derive `currentState` z istniejącego state'u (zero nowych źródeł danych).
-3. `useState<number>(Date.now())` + `useEffect([currentState], () => setStateStartedAt(Date.now()))` — tylko Tumbler i Freezing.
-4. Render `<StateMachineBadge states={...} current={currentState} labels={...} timer={...} />` zaraz pod nagłówkiem terminala (nad istniejącą sekcją "Operator/Wybór zlecenia").
-
-## Czego NIE robię
-- Nie trzymam stanu w bazie (zgodnie z briefem) — wyłącznie derive z istniejącego UI state'u + statusu zlecenia z bazy przy wejściu (już ładowany przez hooki).
-- Nie zmieniam istniejącej logiki `step` w TumblerTerminalPage — badge tylko czyta.
-- Nie dodaję migracji.
-- Nie tworzę testów jednostkowych (poza `tsc`).
-
-## Plik do utworzenia / zmiany
-- create `src/lib/stateMachines.ts`
-- create `src/components/production/StateMachineBadge.tsx`
-- edit `src/pages/production/WeighingTerminalPage.tsx`
-- edit `src/pages/production/TumblerTerminalPage.tsx`
-- edit `src/pages/production/KebabAssemblyTerminalPage.tsx`
-- edit `src/pages/production/ShockFreezingTerminalPage.tsx`
-
-## Test (acceptance)
-1. `/production/tumbler` bez wybranego zlecenia → badge "Idle".
-2. Wybór zlecenia + skan partii → "Loading" (timer rusza od 00:00).
-3. Save inputs → "Loaded" (timer reset).
-4. Setup receptury → "Mixing" (timer reset, leci).
-5. Waga po-procesowa → "Done".
-6. "ZAKOŃCZ PARTIĘ" → "Closed".
-7. Analogicznie Weighing/Assembly/Freezing — przejścia per mapowanie wyżej.
-8. `tsc` clean.
+## Po sprincie
+Update `mem://features/mes-tumbler-workflow` o nowy guard receptury.
