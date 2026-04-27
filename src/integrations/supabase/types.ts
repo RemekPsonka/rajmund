@@ -801,6 +801,7 @@ export type Database = {
       }
       t_production_logs: {
         Row: {
+          ccp_passed: boolean | null
           created_at: string | null
           deviation_kg: number | null
           deviation_percent: number | null
@@ -811,6 +812,7 @@ export type Database = {
           freezing_started_at: string | null
           handling_unit_id: string | null
           id: string
+          latest_core_temp_c: number | null
           output_batch_id: string | null
           packaging_count: number | null
           packaging_type: string | null
@@ -826,6 +828,7 @@ export type Database = {
           weight_tare: number | null
         }
         Insert: {
+          ccp_passed?: boolean | null
           created_at?: string | null
           deviation_kg?: number | null
           deviation_percent?: number | null
@@ -836,6 +839,7 @@ export type Database = {
           freezing_started_at?: string | null
           handling_unit_id?: string | null
           id?: string
+          latest_core_temp_c?: number | null
           output_batch_id?: string | null
           packaging_count?: number | null
           packaging_type?: string | null
@@ -851,6 +855,7 @@ export type Database = {
           weight_tare?: number | null
         }
         Update: {
+          ccp_passed?: boolean | null
           created_at?: string | null
           deviation_kg?: number | null
           deviation_percent?: number | null
@@ -861,6 +866,7 @@ export type Database = {
           freezing_started_at?: string | null
           handling_unit_id?: string | null
           id?: string
+          latest_core_temp_c?: number | null
           output_batch_id?: string | null
           packaging_count?: number | null
           packaging_type?: string | null

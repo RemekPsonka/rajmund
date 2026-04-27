@@ -1,88 +1,67 @@
-# Sprint: Walidacja receptury w Tumblerze
+# Sprint: Mrożenie szokowe — persystencja + CCP
 
 ## Cel
-Operator masowni widzi recepturę i jej składniki w czasie rzeczywistym; "ZAKOŃCZ PARTIĘ" wymaga zgodności wsadu z recepturą (±5% per składnik).
+Sesje mrożenia są persystowane w `t_production_logs`. Operator wpisuje temperaturę rdzenia, a CCP (≤ -18°C) decyduje o emisji LOT-u przy zamknięciu.
 
-## Decyzje vs. brief
-
-1. **Wybór receptury "przed wyborem partii"** — w briefie. Kontra: obecny flow Tumblera ma 3 stepy (input → processing → output), gdzie receptura jest wybierana w step 2. Przeniesienie na sam początek wymaga refactoru wszystkich 3 stepów, dodatkowo robocze: receptura często ZALEŻY od dostępnych partii surowca, nie odwrotnie. **Decyzja: dodaję selektor receptury jako nową sekcję NA SAMEJ GÓRZE step "input"** (nad logowaniem pracownika), co semantycznie spełnia "przed wyborem partii", a fizycznie nie wywraca flowa.
-2. **`role` w `t_recipe_ingredients`** — brak w schemacie, dodaję migracją (text NOT NULL DEFAULT 'MEAT'). Wartości: `MEAT | SPICE | WATER | OTHER`. Domyślnie wszystkie istniejące → 'MEAT' (zgodnie z briefem).
-3. **`stage` w `t_recipes`** — nie istnieje, brief pisze "jeśli mają jakieś pole stage" — pomijam filtr, lista pokazuje wszystkie aktywne receptury company.
-4. **Tolerancja ±5%** — UI-side stała `RECIPE_TOLERANCE_PERCENT = 5`.
-5. **Mapowanie partii → role** — partia ma produkt; produkt ma `industry_category`. W tabeli "Aktualne" sumuję `inputItems` po `role` składnika. **Mapowanie**: dla każdego `inputItem` szukam matchującego `recipe_ingredient` po `product_id` (1:1) i sumuję wagę; jeśli partia jest produktem spoza receptury — NIE liczy się jako żaden składnik (operator widzi to w toaście "Partia X nie jest składnikiem receptury"). Bez heurystyki "MEAT/SPICE/WATER" przy skanowaniu — to wynika z product_id składnika.
-6. **`target_total_kg`** — nowy lokalny state w komponencie (Input number, default 100). Wymagana ilość per składnik = `target_total_kg * (ratio_normalized)`, gdzie ratio_normalized to `amount_per_kg_base / sum(amount_per_kg_base)` — bo brief wprost mówi "mięso 80%, przyprawa 5%, woda 15%" jako PROCENTY. Receptura w bazie trzyma to jako raw `amount_per_kg_base`, normalizujemy do 100% sumy.
+## Stan obecny vs. brief
+- ✅ Start mrożenia → INSERT do `t_production_logs` z `freezing_started_at`, `source_batch_id`, `production_order_id` (już zrobione, działa).
+- ✅ useEffect przywraca aktywne sesje przy mount (już zrobione).
+- ❌ Brak pól `latest_core_temp_c` i `ccp_passed` w DB.
+- ❌ Brak UI do "POBIERZ TEMPERATURĘ" (input per item).
+- ❌ Zakończenie nie sprawdza CCP ani nie wywołuje `close_production_order_with_lineage`.
 
 ## Pliki
 
-### 1. `supabase/migrations/<timestamp>_add_role_to_recipe_ingredients.sql` (nowy)
+### 1. Migracja — nowe kolumny
 ```sql
-ALTER TABLE public.t_recipe_ingredients
-  ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'MEAT';
+ALTER TABLE public.t_production_logs
+  ADD COLUMN IF NOT EXISTS latest_core_temp_c numeric,
+  ADD COLUMN IF NOT EXISTS ccp_passed boolean;
 
-COMMENT ON COLUMN public.t_recipe_ingredients.role IS
-  'Rola składnika w recepturze: MEAT | SPICE | WATER | OTHER. Wpływa na walidacje wsadu.';
-
--- Trigger walidujący wartości (CHECK constraint nie używamy zgodnie ze standardem projektu)
-CREATE OR REPLACE FUNCTION public.validate_recipe_ingredient_role()
-RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-  IF NEW.role NOT IN ('MEAT','SPICE','WATER','OTHER') THEN
-    RAISE EXCEPTION 'Invalid recipe ingredient role: %', NEW.role;
-  END IF;
-  RETURN NEW;
-END $$;
-
-DROP TRIGGER IF EXISTS trg_validate_recipe_ingredient_role ON public.t_recipe_ingredients;
-CREATE TRIGGER trg_validate_recipe_ingredient_role
-  BEFORE INSERT OR UPDATE ON public.t_recipe_ingredients
-  FOR EACH ROW EXECUTE FUNCTION public.validate_recipe_ingredient_role();
+COMMENT ON COLUMN public.t_production_logs.latest_core_temp_c IS
+  'Ostatni odczyt temp. rdzenia (°C). Aktualizowany w trakcie mrożenia.';
+COMMENT ON COLUMN public.t_production_logs.ccp_passed IS
+  'Critical Control Point: TRUE jeśli przy zamknięciu temp ≤ -18°C, FALSE jeśli > -18°C, NULL jeśli mrożenie trwa.';
 ```
 
-### 2. `src/hooks/useRecipes.ts` (edit)
-- `RecipeIngredient`: dodać `role: 'MEAT' | 'SPICE' | 'WATER' | 'OTHER'`.
-- `useSaveRecipeWithIngredients`: rozszerzyć ingredient mapping o `role` (default 'MEAT' jeśli niepodane — żeby istniejące formularze receptur nie wybuchły).
+### 2. `src/hooks/useProductionOrders.ts`
+- `useUpdateProductionLog` — rozszerzyć typ payload o `latest_core_temp_c?: number | null` i `ccp_passed?: boolean | null`. Drobne: usunąć obowiązkowy toast.success "Log produkcji zaktualizowany" (zalewa UI przy każdym pomiarze) — przenieść do callera lub uciszyć dla update'ów temp.
 
-### 3. `src/pages/production/TumblerTerminalPage.tsx` (edit)
-- **Nowy state**: `targetTotalKg` (number, default 100).
-- **Move state hoist**: `selectedRecipeId` już jest, używam go też w step "input".
-- **Nowa sekcja na górze step="input"** — `Card` z:
-  - `Select` receptur (lista z `recipes` filtrowane po `selectedOrder.company_id`).
-  - `Input number` "Cel kg" (`targetTotalKg`).
-  - Jeśli `recipes?.length === 0`: żółty alert "Brak zdefiniowanej receptury. Możesz kontynuować w trybie ręcznym, ale system nie sprawdzi zgodności."
-  - Jeśli wybrana: tabela składników z 4 kolumnami: Nazwa | Wymagane | Aktualne | Status (zielona/czerwona kropka).
-- **Logika walidacji** (`useMemo`):
-  ```ts
-  const recipeCheck = useMemo(() => {
-    if (!selectedRecipeId || !recipeIngredients?.length) return { ok: true, perIngredient: [] };
-    const sumRatio = recipeIngredients.reduce((s,i)=>s+(Number(i.amount_per_kg_base)||0),0) || 1;
-    const perIngredient = recipeIngredients.map(ing => {
-      const required = targetTotalKg * (Number(ing.amount_per_kg_base)||0) / sumRatio;
-      const actual = inputItems
-        .filter(it => it.productId === ing.product_id)
-        .reduce((s,it)=>s+it.weight,0);
-      const tol = required * (RECIPE_TOLERANCE_PERCENT/100);
-      const inTol = Math.abs(actual - required) <= tol;
-      return { ing, required, actual, inTol };
-    });
-    return { ok: perIngredient.every(p=>p.inTol), perIngredient };
-  }, [selectedRecipeId, recipeIngredients, inputItems, targetTotalKg]);
-  ```
-- **Rozszerz `canFinish`**: `canFinish = hasInputs && hasPostWeight && recipeCheck.ok`. Jeśli `selectedRecipeId === ""` (manual mode) — `recipeCheck.ok = true` (pomijamy walidację, bo operator świadomie pracuje bez receptury — patrz alert).
-- **`finishDisabledReason`**: dodaj wariant "Wsad niezgodny z recepturą — sprawdź składniki".
-- **Bez zmian w istniejącym step 2 (`processing`)** — pozostaje jako podsumowanie/uzysk; selektor receptury tam nadal działa, ale jest zsynchronizowany przez `selectedRecipeId`.
+### 3. `src/pages/production/ShockFreezingTerminalPage.tsx`
+- `FreezingItem` rozszerzyć o `latestTempC?: number | null`, `ccpPassed?: boolean | null`.
+- Mapper z DB (useEffect ładujący `existingFreezingLogs`) — dopisać te dwa pola z loga.
+- Nowy lokalny state `tempInputs: Record<itemId, string>` do drugiej kolumny inputu temperatury w wierszu tabeli.
+- Nowa funkcja `handleSaveTemperature(itemId)`:
+  - Walidacja: liczba między -50 a 30.
+  - `updateLog.mutateAsync({ id: dbLogId, latest_core_temp_c: value })`.
+  - Update local state itema.
+  - Toast "Zapisano temperaturę: X°C".
+- `handleCompleteFreezing` przerobić:
+  - Wymaga `latestTempC != null` — toast jeśli brak.
+  - `passed = latestTempC <= -18`.
+  - `updateLog.mutateAsync({ id, freezing_completed_at, freezing_duration_minutes, ccp_passed: passed })`.
+  - Jeśli `passed === true`: spróbuj `closeOrder.mutateAsync(productionOrderId)` (RPC `close_production_order_with_lineage`) — emituje LOT.
+  - Jeśli `passed === false`: pozostaw zlecenie Open, dopisz notatkę do zlecenia (`notes += "\n[QC] Mrożenie #X: temp -15°C nie spełnia CCP -18°C"`), toast warning "Wymaga decyzji QC — zlecenie pozostaje otwarte".
+- Tabela: dodać 2 kolumny:
+  - **Temp. rdzenia (°C)**: input number + przycisk "Zapisz" (lub Enter). Pokaż ostatni zapisany odczyt poniżej.
+  - **CCP**: badge "PASS"/"FAIL"/"—" (po zakończeniu). W trakcie mrożenia: kolor temp (niebieski jeśli ≤-18, czerwony jeśli > -18).
+- Item w stanie `completed` z `ccpPassed===false` → wiersz z czerwoną ramką + badge "Wymaga QC".
+- `production_order_id` musi być pamiętany na FreezingItem żeby móc go zamknąć (dziś nie jest — dodać `productionOrderId?: string` do interface i wypełniać przy create+load).
+
+## Struktury UI tabeli (po zmianach)
+| Status | Nr Partii | Produkt | Waga | Czas | **Temp** | **CCP** | Akcja |
+|--------|-----------|---------|------|------|----------|---------|-------|
 
 ## Acceptance check
-1. Operator wchodzi w step "input" → widzi sekcję "Receptura" jako pierwszą kartę. ✅
-2. Brak receptur → żółty alert. ✅
-3. Wybór receptury 80%/15%/5% + target 100kg → tabela: Mięso wymag.=80, Przyprawa wymag.=5, Woda wymag.=15. Aktualne = 0. Statusy czerwone. ✅
-4. Skanowanie partii sumuje się po `product_id` w kolumnie "Aktualne". 78/16/4.5 → wszystkie zielone. ✅
-5. ZAKOŃCZ PARTIĘ disabled przy 50kg mięsa, enabled przy 78kg. ✅
-6. Tooltip pokazuje powód blokady. ✅
+1. F5 nie czyści listy — ✅ (już działa, mapper teraz też czyta `latest_core_temp_c`).
+2. Pola `freezing_started_at`, `latest_core_temp_c`, `freezing_completed_at`, `ccp_passed` widoczne w DB — ✅ po migracji.
+3. Mrożenie z temp -15°C → ccp_passed=false, brak LOT-u, zlecenie Open z notatką — ✅.
+4. Mrożenie z temp -20°C → ccp_passed=true, zlecenie Closed, LOT wyemitowany — ✅.
 
-## Pliki dotykane
-- `supabase/migrations/<ts>_add_role_to_recipe_ingredients.sql` (nowy)
-- `src/hooks/useRecipes.ts` (rozszerzenie typu + insert)
-- `src/pages/production/TumblerTerminalPage.tsx` (nowa sekcja + walidacja)
+## Pliki dotknięte
+- `supabase/migrations/<ts>_freezing_ccp_fields.sql` (nowy)
+- `src/hooks/useProductionOrders.ts` (typ update)
+- `src/pages/production/ShockFreezingTerminalPage.tsx` (UI + logika)
 
 ## Po sprincie
-Update `mem://features/mes-tumbler-workflow` o nowy guard receptury.
+Update `mem://features/traceability-logic` o CCP gating LOT-u przy mrożeniu.
