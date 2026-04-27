@@ -31,33 +31,35 @@ export interface HandlingUnitFormData {
   type?: HandlingUnitType;
 }
 
-// Calculate GS1 Mod10 check digit for SSCC
-function calculateSSCCCheckDigit(sscc17: string): string {
+// GS1 SSCC: 18 digits = 1 extension + 7 company prefix + 9 serial + 1 check digit
+// Hardcoded fictional company prefix dla dema; w P2 z konfiguracji firmy.
+const SSCC_COMPANY_PREFIX = "5901234";
+
+// Calculate GS1 Mod10 check digit for first 17 digits of SSCC
+export function calculateSSCCCheckDigit(sscc17: string): string {
+  if (sscc17.length !== 17) {
+    throw new Error(`mod10Check expects 17 digits, got ${sscc17.length}`);
+  }
+  if (!/^\d{17}$/.test(sscc17)) {
+    throw new Error("mod10Check expects only digits 0-9");
+  }
   let sum = 0;
   for (let i = 0; i < 17; i++) {
     const digit = parseInt(sscc17.charAt(i), 10);
-    // Odd positions (1, 3, 5...) multiply by 3, even by 1 (GS1 standard)
+    // Position 1 (i=0) waga 3, position 2 (i=1) waga 1, naprzemiennie
     sum += digit * (i % 2 === 0 ? 3 : 1);
   }
-  const checkDigit = (10 - (sum % 10)) % 10;
-  return checkDigit.toString();
+  return ((10 - (sum % 10)) % 10).toString();
 }
 
-// Generate SSCC number with valid GS1 check digit
+// Generate SSCC number with valid GS1 check digit (18 digits total)
 export function generateSSCC(): string {
-  const date = new Date();
-  const year = date.getFullYear().toString().slice(-2);
-  const month = (date.getMonth() + 1).toString().padStart(2, "0");
-  const day = date.getDate().toString().padStart(2, "0");
-  const hour = date.getHours().toString().padStart(2, "0");
-  const min = date.getMinutes().toString().padStart(2, "0");
-  const random = Math.floor(Math.random() * 1000).toString().padStart(3, "0");
-  
-  // Build 17-digit base (extension digit + GS1 company prefix + serial)
-  const sscc17 = `0${year}${month}${day}${hour}${min}${random}`;
-  const checkDigit = calculateSSCCCheckDigit(sscc17);
-  
-  return sscc17 + checkDigit;
+  const extension = "3"; // 1 cyfra
+  const serial = Math.floor(Math.random() * 1e9)
+    .toString()
+    .padStart(9, "0"); // 9 cyfr
+  const sscc17 = extension + SSCC_COMPANY_PREFIX + serial; // 17 cyfr
+  return sscc17 + calculateSSCCCheckDigit(sscc17); // 18 cyfr
 }
 
 // Fetch handling units
