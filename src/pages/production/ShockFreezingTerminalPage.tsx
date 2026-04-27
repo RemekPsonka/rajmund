@@ -234,33 +234,100 @@ export default function ShockFreezingTerminalPage() {
     }
   };
 
-  // Complete freezing for an item
+  // Save temperature reading for an active freezing item
+  const handleSaveTemperature = async (itemId: string) => {
+    const item = freezingItems.find(i => i.id === itemId);
+    if (!item || !item.dbLogId) return;
+
+    const raw = (tempInputs[itemId] ?? "").trim().replace(",", ".");
+    const value = Number(raw);
+    if (raw === "" || Number.isNaN(value)) {
+      toast.error("Wprowadź poprawną wartość temperatury");
+      return;
+    }
+    if (value < -50 || value > 30) {
+      toast.error("Temperatura poza zakresem (-50 do 30°C)");
+      return;
+    }
+
+    try {
+      await updateLog.mutateAsync({
+        id: item.dbLogId,
+        latest_core_temp_c: value,
+        silent: true,
+      });
+      setFreezingItems(prev =>
+        prev.map(i => i.id === itemId ? { ...i, latestTempC: value } : i)
+      );
+      setTempInputs(prev => ({ ...prev, [itemId]: "" }));
+      toast.success(`Zapisano temp.: ${value}°C`);
+    } catch (error) {
+      console.error("Save temperature error:", error);
+    }
+  };
+
+  // Complete freezing — CCP gate decides whether to emit LOT
   const handleCompleteFreezing = async (itemId: string) => {
     const item = freezingItems.find(i => i.id === itemId);
     if (!item) return;
 
+    if (item.latestTempC == null) {
+      toast.error("Najpierw wpisz temperaturę rdzenia");
+      return;
+    }
+
     const duration = Math.round((Date.now() - item.startedAt.getTime()) / 60000);
     const now = new Date().toISOString();
+    const passed = item.latestTempC <= CCP_THRESHOLD_C;
 
     try {
       if (item.dbLogId) {
-        // Update in database
         await updateLog.mutateAsync({
           id: item.dbLogId,
           freezing_completed_at: now,
           freezing_duration_minutes: duration,
+          ccp_passed: passed,
+          silent: true,
         });
       }
 
-      setFreezingItems(prev => 
-        prev.map(i => 
-          i.id === itemId 
-            ? { ...i, status: "completed" as const }
+      if (passed && item.productionOrderId) {
+        // Emit LOT via lineage RPC
+        try {
+          await closeOrder.mutateAsync(item.productionOrderId);
+          toast.success(`Mrożenie zakończone — LOT wyemitowany (${item.batchNumber})`);
+        } catch (e) {
+          // close RPC może wymagać innych warunków — pokaż błąd ale nie wycofuj zamknięcia loga
+          console.error("Close order failed:", e);
+          toast.warning(`Mrożenie zamknięte, ale nie udało się wyemitować LOT-u: ${(e as Error).message}`);
+        }
+      } else if (!passed && item.productionOrderId) {
+        // Append note to order, leave Open for QC
+        try {
+          const { data: order } = await supabase
+            .from("t_production_orders")
+            .select("notes")
+            .eq("id", item.productionOrderId)
+            .single();
+          const stamp = `[QC ${format(new Date(), "yyyy-MM-dd HH:mm")}] Mrożenie ${item.batchNumber}: temp ${item.latestTempC}°C nie spełnia CCP (${CCP_THRESHOLD_C}°C)`;
+          const newNotes = order?.notes ? `${order.notes}\n${stamp}` : stamp;
+          await supabase
+            .from("t_production_orders")
+            .update({ notes: newNotes })
+            .eq("id", item.productionOrderId);
+        } catch (e) {
+          console.error("Note append failed:", e);
+        }
+        toast.warning(`Wymaga decyzji QC — temp ${item.latestTempC}°C > ${CCP_THRESHOLD_C}°C. Zlecenie pozostaje otwarte.`);
+      }
+
+      setFreezingItems(prev =>
+        prev.map(i =>
+          i.id === itemId
+            ? { ...i, status: "completed" as const, ccpPassed: passed }
             : i
         )
       );
-
-      toast.success(`Zakończono mrożenie: ${item.batchNumber} (${duration} min)`);
       refetchFreezingLogs();
     } catch (error) {
       console.error("Freezing complete error:", error);
