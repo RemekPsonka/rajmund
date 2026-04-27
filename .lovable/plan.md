@@ -1,81 +1,65 @@
-## Sprint 3.2 — Krzywa temperatur w czasie rzeczywistym
+## Sprint 3.3 — Wykres krzywej temperatury w terminalu mrożenia
 
-### 1. Nowy plik `src/lib/mockHardware.ts`
+### 1. Nowy komponent `src/components/production/FreezingTempChart.tsx`
 
-Funkcja symulująca pomiar sondy temperatury — krzywa wykładnicza z `T0=4°C` asymptotycznie do `Ttarget=-22°C`. Domyślne `k=0.0008` (~50 min do CCP −18°C w czasie symulowanym = realnym). Komentarz w nagłówku tłumaczy parametry. **Demo override**: drugi eksport `mockFreezingTempAtFast` z `k=0.01` na potem (S3.3), nie używany teraz.
+**Props**: `{ productionLogId: string; targetTempC?: number /* -18 */; ambientLine?: boolean; title?: string }`
 
-```ts
-export function mockFreezingTempAt(
-  elapsedSec: number,
-  T0 = 4,
-  Ttarget = -22,
-  k = 0.0008
-): number {
-  const t = T0 + (Ttarget - T0) * (1 - Math.exp(-k * elapsedSec));
-  return Math.round(t * 10) / 10;
-}
-```
+**Logika**:
+- Konsumuje `useFreezingTempStream(productionLogId)` z S3.2 → `readings` rośnie automatycznie przez Realtime channel.
+- `useMemo` mapuje pomiary na `{ ts, label: HH:MM, core, ambient, source }`.
+- `last = data[data.length-1]`, `reachedTarget = last.core <= targetTempC`, `remaining = |last.core - targetTempC|`.
+- `yDomain` auto-skalowane z paddingiem (min/max ± 2-3°C, zawsze obejmuje target).
 
-### 2. Nowy hook `src/hooks/useFreezingTempStream.ts`
+**Render** (shadcn Card):
+- **CardHeader** — flex split:
+  - Lewo: tytuł `ThermometerSnowflake + "Krzywa temperatury rdzenia"`, podtytuł `Target ≤ -18°C (CCP) · N pomiarów`.
+  - Prawo: duża cyfra `font-mono tabular-nums` `style={{fontSize: 48}}` z `last.core` + `Badge`:
+    - Target osiągnięty → `bg-success text-success-foreground` „OSIĄGNIĘTO TARGET — można zakończyć mrożenie"
+    - W trakcie → `bg-warning text-warning-foreground` „OZIĘBIANIE — pozostało {remaining}°C"
+- **CardContent**:
+  - `isLoading` → `Skeleton h-[300px] w-full`
+  - `data.length === 0` → `EmptyState` z ikoną `ThermometerSnowflake`, tytuł „Oczekiwanie na pierwszy pomiar..."
+  - W innym przypadku `ResponsiveContainer h=300` + `LineChart`:
+    - `CartesianGrid` `hsl(var(--border))`
+    - `XAxis dataKey="label"`, `YAxis domain={yDomain}`, ticki `hsl(var(--muted-foreground))`
+    - `ReferenceLine y={targetTempC}` `stroke=hsl(var(--destructive))`, `strokeDasharray="5 5"`, label „Target -18°C"
+    - `Line dataKey="core"` `stroke=hsl(var(--primary))` `strokeWidth=2`, `isAnimationActive={false}`
+    - **Dot tylko dla ostatnich 3 pomiarów** (custom funkcja zwraca `<circle>` jeśli `index >= data.length-3`, w przeciwnym razie pusty `<g>`)
+    - `activeDot={{ r: 6 }}` na hover
+    - Opcjonalnie `Line dataKey="ambient"` (`ambientLine`) jako szara przerywana
+  - **CustomTooltip**: pokazuje `HH:mm:ss`, „Rdzeń: X°C", opcjonalnie „Otoczenie", „Źródło: auto (sonda) / ręczny"
 
-- `useQuery(['freezing-temp', productionLogId], …)` — `enabled: !!productionLogId`, fetch z `t_freezing_temp_log` (`id, recorded_at, core_temp_c, ambient_temp_c, source`) + `order('recorded_at', { ascending: true })`.
-- `useEffect`: zakłada Supabase Realtime channel `freezing_temp:${productionLogId}` z `postgres_changes` filtrem `production_log_id=eq.${productionLogId}` na event `INSERT` → `queryClient.invalidateQueries`. Cleanup: `supabase.removeChannel(channel)`.
-- Zwraca: `{ readings, isLoading, error }` z typem `FreezingTempReading[]`.
+### 2. Wpięcie w `src/pages/production/ShockFreezingTerminalPage.tsx`
 
-### 3. Auto-pomiar co 30s w `ShockFreezingTerminalPage.tsx`
+- Import `FreezingTempChart`.
+- Wybierz **pierwszą aktywną sesję**: `const activeChartItem = freezingItems.find(i => i.status === "freezing" && i.dbLogId)`.
+- Wstaw **powyżej** istniejącej karty z tabelą sesji (przed `<Card>` zawierającym `freezingItems.map`):
+  ```tsx
+  {activeChartItem?.dbLogId && (
+    <FreezingTempChart productionLogId={activeChartItem.dbLogId} targetTempC={CCP_THRESHOLD_C} />
+  )}
+  ```
+- Jeśli kilka aktywnych sesji — pokazujemy tylko pierwszą (selektor odkładamy na S3.4, demo nie potrzebuje).
 
-Nowy `useEffect` zależny od `freezingItems` — dla każdego itemu o `status === 'freezing'` z `dbLogId` ustawia `setInterval(30_000)`:
+### 3. Konwencje (potwierdzone w kodzie)
 
-```ts
-const elapsed = (Date.now() - item.startedAt.getTime()) / 1000;
-const mockTemp = mockFreezingTempAt(elapsed);
-await supabase.from('t_freezing_temp_log').insert({
-  production_log_id: item.dbLogId,
-  core_temp_c: mockTemp,
-  source: 'auto',
-});
-await updateLog.mutateAsync({
-  id: item.dbLogId,
-  latest_core_temp_c: mockTemp,
-  silent: true,
-});
-setFreezingItems(prev => prev.map(i =>
-  i.id === item.id ? { ...i, latestTempC: mockTemp } : i
-));
-```
+- Tokeny istnieją: `--primary`, `--destructive`, `--success`, `--success-foreground`, `--warning`, `--warning-foreground`, `--border`, `--muted-foreground`, `--background`, `--popover`. Wszystko HSL przez `hsl(var(--…))`.
+- shadcn primitives: `Card/CardHeader/CardTitle/CardContent`, `Badge`, `Skeleton`, `EmptyState`.
+- Polish UI strings.
+- Bez dark/light hardcode.
 
-Cleanup: `intervals.forEach(clearInterval)` w return useEffectu — automatycznie wywołane gdy item zniknie z listy aktywnych (po `handleCompleteFreezing` jego status idzie na `completed` i interval jest tworzony ponownie tylko dla `freezing`).
+### 4. Co świadomie zostawiamy
 
-Klucz mapy intervalów: `dbLogId`. Diff oparty o listę aktywnych ID, żeby nie restartować intervalu przy każdym tikcie zegara/rerendererze.
+- **Selektor sesji** gdy >1 aktywna — S3.4.
+- **Eksport krzywej do PDF / raport CCP** — sprint dokumentacyjny.
+- **Hard gate na bazie min temp z całej krzywej** (np. „target musi się utrzymać ≥ X minut") — S3.4.
 
-### 4. Ręczny pomiar dorzuca wpis `source='manual'`
+### 5. Ryzyka
 
-W `handleSaveTemperature` po `updateLog.mutateAsync(...)`:
-
-```ts
-await supabase.from('t_freezing_temp_log').insert({
-  production_log_id: item.dbLogId,
-  core_temp_c: value,
-  source: 'manual',
-});
-```
-
-Błędy INSERT logujemy do konsoli, nie przerywamy flowu (toast sukcesu już był).
-
-### 5. Co świadomie zostawiamy poza sprintem
-
-- **Wykres krzywej w UI** (Recharts) — to S3.3. `useFreezingTempStream` jest gotowy do wpięcia, ale jeszcze go nie konsumujemy w terminalu.
-- **CCP1 na PZ w UI** (kolumny już są w DB z S3.1) — osobny prompt.
-- **Hard-gate freezingu na bazie krzywej** (analiza min temp z całej historii) — S3.4.
-
-### 6. Ryzyka / decyzje
-
-- **Pierwszy auto-pomiar po 30s, nie natychmiast** — zgodnie z brzmieniem zadania (`setInterval` bez `setTimeout(0)` na start). Jeśli operator chce mieć wpis 0s = ręcznie kliknie zapis.
-- **Brak optymistycznych aktualizacji UI** dla auto-pomiarów — Realtime channel + invalidate załatwią odświeżenie wykresu w S3.3.
-- **`silent: true` na updateLog** — bez toastów, zgodnie z konwencją.
-- **Pre-existing security warnings** (SECURITY DEFINER functions na `public`) z migracji S3.1 są pre-existing dla całego projektu (no-auth + RLS) — nie tykamy ich tutaj.
+- `Realtime invalidate` powoduje refetch całej historii — przy długiej sesji (>1000 pomiarów) może puchnąć. Na demo i produkcję S3 nie problem (≤ 480 pomiarów / 4h przy interwale 30s). Optymalizacja przyrostowa (cache merge zamiast invalidate) odkładana.
+- Custom `dot` w Recharts musi mieć stabilny `key` — używam `dot-${index}`.
 
 ### Pliki
 
-- **Nowe**: `src/lib/mockHardware.ts`, `src/hooks/useFreezingTempStream.ts`
-- **Edycja**: `src/pages/production/ShockFreezingTerminalPage.tsx` (auto-interval useEffect + INSERT manual w `handleSaveTemperature`)
+- **Nowy**: `src/components/production/FreezingTempChart.tsx`
+- **Edycja**: `src/pages/production/ShockFreezingTerminalPage.tsx` (import + warunkowe renderowanie wykresu nad tabelą)
