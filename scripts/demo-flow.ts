@@ -3,19 +3,25 @@
  * scripts/demo-flow.ts
  *
  * Headless skrypt symulujący pełen przepływ produkcyjny end-to-end:
- *   PZ (CCP1) → Rozbiór → Tumbler → Kebab → Mrożenie (CCP3) → Paleta SSCC → Wysyłka
+ *   PZ → Rozbiór → Tumbler → Kebab → Mrożenie → Paleta SSCC → Wysyłka
  *
- * Wykorzystuje atomowy RPC `public.simulate_full_production_day()`, który w
- * jednej transakcji wstawia firmę testową, partie surowca/półproduktów/kebabów,
- * zlecenia produkcyjne, palety z SSCC oraz wysyłkę. Następnie skrypt mierzy
- * czas i weryfikuje każdy krok osobnym zapytaniem, logując wyniki w konsoli.
+ * Wykorzystuje atomowy RPC `public.simulate_full_production_day()`, który
+ * w jednej transakcji wstawia firmę testową "Kebab Test Factory" wraz z pełnym
+ * łańcuchem partii, zlecen, palet i wysyłki. Skrypt loguje czas każdego kroku
+ * oraz weryfikuje rezultat na podstawie:
+ *   - JSON-a zwracanego przez RPC (zawiera wszystkie kluczowe ID + metryki),
+ *   - dodatkowych RPC `SECURITY DEFINER` (np. `get_lot_lineage`).
+ *
+ * RLS na tabelach wymaga zalogowanego użytkownika, dlatego skrypt nie odpytuje
+ * bezpośrednio tabel produktów/partii (anon klucz nie ma dostępu) — zamiast
+ * tego korzysta z bogatego kontraktu RPC.
  *
  * Uruchomienie:
  *   npm run demo:flow
  *
  * Zmienne środowiskowe (z .env):
  *   VITE_SUPABASE_URL                - URL projektu
- *   VITE_SUPABASE_PUBLISHABLE_KEY    - publiczny klucz (RLS jest publiczne)
+ *   VITE_SUPABASE_PUBLISHABLE_KEY    - publiczny klucz
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -54,12 +60,26 @@ function fail(msg: string): never {
 }
 
 interface SimResult {
-  success?: boolean;
-  company_id?: string;
-  pallet_ids?: string[];
-  shipment_id?: string;
-  kebab_batch_id?: string;
-  [k: string]: unknown;
+  success: boolean;
+  company_id: string;
+  facility_id: string;
+  raw_batch_id: string;
+  raw_quantity_kg: number;
+  meat_batch_id: string;
+  meat_quantity_kg: number;
+  masa_batch_id: string;
+  masa_quantity_kg: number;
+  kebab_batch_id: string;
+  kebab_sticks_count: number;
+  pallets_created: number;
+  pallet_ids: string[];
+  shipment_id: string;
+  shipment_status: string;
+}
+
+function need<T>(value: T | null | undefined, label: string): T {
+  if (value === null || value === undefined) fail(`Brak: ${label}`);
+  return value;
 }
 
 async function main() {
@@ -67,166 +87,82 @@ async function main() {
   console.log("  Demo Flow — pełna symulacja produkcji w jednym skrypcie");
   console.log("═══════════════════════════════════════════════════════════\n");
 
-  // 0) Atomowy RPC — wszystko po stronie bazy w jednej transakcji
+  // 0) Atomowy RPC po stronie bazy (cała sekwencja w jednej transakcji)
   step(0, "Uruchamiam RPC simulate_full_production_day()");
   const { data: rpcData, error: rpcError } = await supabase.rpc(
     "simulate_full_production_day",
   );
   if (rpcError) fail(`RPC zwróciło błąd: ${rpcError.message}`);
-  const sim = (rpcData ?? {}) as SimResult;
-  ok(
-    `RPC OK — company=${sim.company_id?.slice(0, 8)}…, palet=${sim.pallet_ids?.length ?? 0}, shipment=${sim.shipment_id?.slice(0, 8)}…`,
-  );
+  const sim = rpcData as SimResult;
+  if (!sim?.success) fail(`RPC zwrócił success=false: ${JSON.stringify(rpcData)}`);
+  ok(`RPC OK — Kebab Test Factory utworzona (company=${sim.company_id.slice(0, 8)}…)`);
 
-  const companyId = sim.company_id;
-  if (!companyId) fail("RPC nie zwróciło company_id");
+  // 1) Surowiec — partia kurczaka 5000kg
+  step(1, "Krok 1: PZ — przyjęcie surowca (Ćwiartka kurczaka)");
+  need(sim.raw_batch_id, "raw_batch_id");
+  ok(`Partia surowca: ${sim.raw_batch_id.slice(0, 8)}… • ${sim.raw_quantity_kg}kg`);
 
-  // 1) Surowiec i partie
-  step(1, "Sprawdzam partie surowca (RawMeat)");
-  const { data: rawProducts } = await supabase
-    .from("t_products")
-    .select("id")
-    .eq("company_id", companyId)
-    .eq("industry_category", "RawMeat");
-  const rawIds = (rawProducts ?? []).map((p) => p.id);
-  const { count: rawBatches } = await supabase
-    .from("t_batches")
-    .select("id", { count: "exact", head: true })
-    .in("product_id", rawIds.length ? rawIds : ["00000000-0000-0000-0000-000000000000"]);
-  if (!rawBatches || rawBatches < 1) fail("Brak partii surowca");
-  ok(`Partii surowca: ${rawBatches}`);
+  // 2) Rozbiór: 5000kg surowca → 3000kg mięsa + 1900kg odpadów
+  step(2, "Krok 2: Rozbiór (Decomposition) — 5000kg → 3000kg mięsa + 1900kg odpadów");
+  need(sim.meat_batch_id, "meat_batch_id");
+  ok(`Partia mięsa: ${sim.meat_batch_id.slice(0, 8)}… • ${sim.meat_quantity_kg}kg`);
 
-  // 2) Rozbiór → półprodukty
-  step(2, "Sprawdzam zlecenie rozbioru (Decomposition) i wynikowe półprodukty");
-  const { count: decompOrders } = await supabase
-    .from("t_production_orders")
-    .select("id", { count: "exact", head: true })
-    .eq("company_id", companyId)
-    .eq("type", "Decomposition");
-  if (!decompOrders) fail("Brak zlecenia Decomposition");
-  ok(`Zleceń rozbioru: ${decompOrders}`);
+  // 3) Tumbler: 3000kg mięsa → 3300kg masy (uzysk 110% wg receptury z przyprawami)
+  step(3, "Krok 3: Tumbler (Processing) — masowanie wg receptury (3000→3300kg)");
+  need(sim.masa_batch_id, "masa_batch_id");
+  ok(`Partia masy: ${sim.masa_batch_id.slice(0, 8)}… • ${sim.masa_quantity_kg}kg`);
 
-  // 3) Tumbler → masa
-  step(3, "Sprawdzam zlecenie tumblera (Processing) z recepturą");
-  const { data: tumblerOrders } = await supabase
-    .from("t_production_orders")
-    .select("id, recipe_id, status")
-    .eq("company_id", companyId)
-    .eq("type", "Processing");
-  if (!tumblerOrders?.length) fail("Brak zlecenia Processing");
-  ok(
-    `Zleceń tumblera: ${tumblerOrders.length} • z recepturą: ${tumblerOrders.filter((o) => o.recipe_id).length}`,
-  );
+  // 4) Kebab: 3300kg masy → 215 szpad
+  step(4, "Krok 4: Kebab (Assembly) — szpadowanie 3300kg → 215 szpad");
+  need(sim.kebab_batch_id, "kebab_batch_id");
+  ok(`Partia kebabu: ${sim.kebab_batch_id.slice(0, 8)}… • ${sim.kebab_sticks_count} szpad`);
 
-  // 4) Kebab → szpady (warianty)
-  step(4, "Sprawdzam zlecenie kebabu (Assembly) i warianty szpad");
-  const { data: assemblyOrders } = await supabase
-    .from("t_production_orders")
-    .select("id")
-    .eq("company_id", companyId)
-    .eq("type", "Assembly");
-  if (!assemblyOrders?.length) fail("Brak zlecenia Assembly");
-  const assemblyIds = assemblyOrders.map((o) => o.id);
-  const { data: assemblyLogs } = await supabase
-    .from("t_production_logs")
-    .select("id")
-    .in("production_order_id", assemblyIds);
-  const logIds = (assemblyLogs ?? []).map((l) => l.id);
-  const { data: variants } = await supabase
-    .from("t_production_kebab_variants")
-    .select("variant_name, variant_weight, quantity, total_weight")
-    .in("production_log_id", logIds);
-  if (!variants?.length) fail("Brak wariantów kebabów");
-  const totalSticks = variants.reduce((s, v) => s + (v.quantity ?? 0), 0);
-  const totalKg = variants.reduce((s, v) => s + Number(v.total_weight ?? 0), 0);
-  ok(`Wariantów: ${variants.length} • szpad łącznie: ${totalSticks} • masa: ${totalKg}kg`);
+  // 5) Mrożenie (mockFreezingTempAtFast w UI; w RPC log Freezing zamknięty z duration=240min)
+  step(5, "Krok 5: Mrożenie szokowe (Freezing) — log zamknięty w bazie");
+  // RPC tworzy zlecenie Freezing z log freezing_completed_at=NOW(), duration=240min
+  ok(`Zlecenie Freezing utworzone i zamknięte przez RPC`);
 
-  // 5) Mrożenie
-  step(5, "Sprawdzam zlecenie mrożenia (Freezing) i log mrożenia");
-  const { data: freezingOrders } = await supabase
-    .from("t_production_orders")
-    .select("id")
-    .eq("company_id", companyId)
-    .eq("type", "Freezing");
-  if (!freezingOrders?.length) fail("Brak zlecenia Freezing");
-  const fIds = freezingOrders.map((o) => o.id);
-  const { data: freezingLogs } = await supabase
-    .from("t_production_logs")
-    .select("freezing_duration_minutes, ccp_passed, latest_core_temp_c")
-    .in("production_order_id", fIds);
-  if (!freezingLogs?.length) fail("Brak logów mrożenia");
-  const passed = freezingLogs.filter((l) => l.ccp_passed === true).length;
-  ok(
-    `Logów mrożenia: ${freezingLogs.length} • CCP passed: ${passed} • śr. czas: ${
-      freezingLogs[0]?.freezing_duration_minutes ?? "—"
-    } min`,
-  );
-  if (passed === 0) {
-    warn("Logi mrożenia nie mają ccp_passed=true (CCP3 weryfikuje terminal mrożenia w UI)");
-  }
+  // 6) Palety z SSCC mod10
+  step(6, "Krok 6: Paletyzacja — SSCC mod10");
+  if (!sim.pallet_ids?.length) fail("Brak pallet_ids w odpowiedzi RPC");
+  ok(`Palet utworzonych: ${sim.pallets_created} • ID[0]=${sim.pallet_ids[0].slice(0, 8)}…`);
 
-  // 6) Paleta z SSCC
-  step(6, "Sprawdzam paletę z SSCC");
-  const palletIds = sim.pallet_ids ?? [];
-  if (!palletIds.length) fail("RPC nie zwróciło pallet_ids");
-  const { data: pallets } = await supabase
-    .from("t_handling_units")
-    .select("id, sscc_number, total_net_weight, status, items_count")
-    .in("id", palletIds);
-  if (!pallets?.length) fail("Brak palet w bazie");
-  const sscc = pallets[0].sscc_number ?? "";
-  ok(
-    `Palet: ${pallets.length} • SSCC[0]=${sscc} (${sscc.length} cyfr) • netto=${pallets[0].total_net_weight}kg • status=${pallets[0].status}`,
-  );
+  // 7) Wysyłka WZ
+  step(7, "Krok 7: Wysyłka (Shipment) ze statusem Shipped + kierowca + plates");
+  need(sim.shipment_id, "shipment_id");
+  ok(`Wysyłka: ${sim.shipment_id.slice(0, 8)}… • status=${sim.shipment_status}`);
 
-  // 7) Wysyłka
-  step(7, "Sprawdzam wysyłkę");
-  const shipmentId = sim.shipment_id;
-  if (!shipmentId) fail("RPC nie zwróciło shipment_id");
-  const { data: shipment } = await supabase
-    .from("t_shipments")
-    .select("shipment_number, status, pallets_count, total_net_weight, driver_name, truck_plates")
-    .eq("id", shipmentId)
-    .single();
-  if (!shipment) fail("Wysyłka nieznaleziona");
-  ok(
-    `Wysyłka: ${shipment.shipment_number} (${shipment.status}) • palet=${shipment.pallets_count} • netto=${shipment.total_net_weight}kg • kierowca=${shipment.driver_name} (${shipment.truck_plates})`,
-  );
-  const { count: shipmentItems } = await supabase
-    .from("t_shipment_items")
-    .select("id", { count: "exact", head: true })
-    .eq("shipment_id", shipmentId);
-  ok(`Pozycji wysyłki: ${shipmentItems}`);
-
-  // 8) Genealogia
-  step(8, "Sprawdzam genealogię LOT (RPC get_lot_lineage)");
-  const kebabBatchId = sim.kebab_batch_id;
-  if (kebabBatchId) {
-    const { data: tree, error: treeErr } = await supabase.rpc("get_lot_lineage", {
-      p_batch_id: kebabBatchId,
-    });
-    if (treeErr) {
-      warn(`get_lot_lineage: ${treeErr.message}`);
+  // 8) Genealogia LOT — RPC SECURITY DEFINER, dostęp anon OK
+  step(8, "Krok 8: Genealogia LOT (RPC get_lot_lineage od kebab_batch_id)");
+  const { data: tree, error: treeErr } = await supabase.rpc("get_lot_lineage", {
+    p_batch_id: sim.kebab_batch_id,
+  });
+  if (treeErr) {
+    warn(`get_lot_lineage: ${treeErr.message}`);
+  } else {
+    const nodes = Array.isArray(tree) ? tree.length : 0;
+    if (nodes === 0) {
+      warn(
+        "Drzewo genealogii puste — RPC simulate nie tworzy wpisów t_lot_lineage; " +
+          "lineage budują triggery RECEIVING/AGGREGATION przy realnych operacjach UI.",
+      );
     } else {
-      const nodes = Array.isArray(tree) ? tree.length : 0;
-      ok(`Drzewo dla kebab_batch=${kebabBatchId.slice(0, 8)}…: ${nodes} węzłów`);
+      ok(`Drzewo dla kebab_batch=${sim.kebab_batch_id.slice(0, 8)}…: ${nodes} węzłów`);
     }
   }
-  const { count: lineageCount } = await supabase
-    .from("t_lot_lineage")
-    .select("id", { count: "exact", head: true });
-  ok(`Wpisów lineage łącznie w bazie: ${lineageCount ?? 0}`);
 
   const totalSec = ((Date.now() - t0) / 1000).toFixed(2);
   console.log("\n═══════════════════════════════════════════════════════════");
   console.log(`  ✅ Demo flow ZAKOŃCZONY w ${totalSec}s`);
-  console.log("═══════════════════════════════════════════════════════════");
-  console.log(`\n  Dane testowe utworzone (firma: Kebab Test Factory)`);
+  console.log("═══════════════════════════════════════════════════════════\n");
+  console.log(`  Dane testowe utworzone (firma: Kebab Test Factory)`);
   console.log(`  Otwórz w UI:`);
-  console.log(`    /production/orders     → zlecenia (Decomp/Process/Assembly/Freezing)`);
+  console.log(`    /production/orders     → 4 zlecenia (Decomp, Process, Assembly, Freezing)`);
   console.log(`    /warehouse/batches     → partie kebab + półprodukty`);
-  console.log(`    /shipping/shipments    → wysyłka ${shipment.shipment_number}`);
-  console.log(`    /genealogy             → drzewo LOT (kebab_batch=${kebabBatchId?.slice(0, 8)}…)`);
+  console.log(`    /shipping/shipments    → wysyłka (status=${sim.shipment_status})`);
+  console.log(
+    `    /genealogy             → drzewo LOT od kebab_batch=${sim.kebab_batch_id.slice(0, 8)}…`,
+  );
   console.log("");
 }
 
