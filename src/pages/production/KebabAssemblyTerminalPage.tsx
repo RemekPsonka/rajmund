@@ -406,10 +406,27 @@ export default function KebabAssemblyTerminalPage() {
         <Button variant="outline" size="icon" onClick={() => navigate(-1)}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <div>
-          <h1 className="text-2xl font-bold">Terminal Składania Kebaba</h1>
-          <p className="text-muted-foreground">Produkcja słupków z masowanego mięsa</p>
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold">Składanie kebabu — {selectedProduct.name}</h1>
+          <p className="text-muted-foreground">
+            Produkt: <span className="font-mono">{selectedProduct.sku ?? "—"}</span>
+            {selectedProduct.unit_target_weight_kg && (
+              <> · domyślna szpada: {Number(selectedProduct.unit_target_weight_kg)} kg</>
+            )}
+          </p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setSelectedProduct(null);
+            setSelectedBatch(null);
+            setCreatedOrderId(null);
+            setAssembledKebabs([]);
+          }}
+        >
+          Zmień produkt
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
