@@ -48,6 +48,9 @@ const TARE_DEFAULT = 2.4;
 export default function KebabAssemblyTerminalPage() {
   const navigate = useNavigate();
 
+  // Sprint: produkt docelowy (kebab) — wybierany PRZED resztą flow
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+
   // Selected batch from Processing output
   const [selectedBatch, setSelectedBatch] = useState<ProcessingOutputBatch | null>(null);
   const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
