@@ -327,6 +327,10 @@ export default function PalletizationPage() {
                           <span>{pallet.total_net_weight.toFixed(1)} kg</span>
                           <span>{TARGET_PALLET_WEIGHT} kg</span>
                         </div>
+                        <div className="mt-1 text-xs text-muted-foreground flex items-center gap-1">
+                          <Printer className="h-3 w-3" />
+                          <span>Ostatni wydruk: {formatLastPrint(pallet.id)}</span>
+                        </div>
                       </CardContent>
                     </Card>
                   ))}
