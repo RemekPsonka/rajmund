@@ -1573,6 +1573,77 @@ export type Database = {
           },
         ]
       }
+      t_supplier_complaints: {
+        Row: {
+          complaint_type: string
+          created_at: string | null
+          id: string
+          movement_id: string | null
+          notes: string | null
+          payload: Json | null
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+          status: string
+          supplier_id: string | null
+        }
+        Insert: {
+          complaint_type: string
+          created_at?: string | null
+          id?: string
+          movement_id?: string | null
+          notes?: string | null
+          payload?: Json | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          status?: string
+          supplier_id?: string | null
+        }
+        Update: {
+          complaint_type?: string
+          created_at?: string | null
+          id?: string
+          movement_id?: string | null
+          notes?: string | null
+          payload?: Json | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          status?: string
+          supplier_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "t_supplier_complaints_movement_id_fkey"
+            columns: ["movement_id"]
+            isOneToOne: false
+            referencedRelation: "t_warehouse_movements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_supplier_complaints_movement_id_fkey"
+            columns: ["movement_id"]
+            isOneToOne: false
+            referencedRelation: "v_recent_movements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_supplier_complaints_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "t_app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_supplier_complaints_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "t_contractors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       t_task_templates: {
         Row: {
           company_id: string

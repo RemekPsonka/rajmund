@@ -53,6 +53,8 @@ export interface MovementFormData {
   driver_name?: string;
   car_plates?: string;
   reception_temp?: number;
+  received_temp_c?: number;
+  received_temp_method?: string;
   notes?: string;
 }
 

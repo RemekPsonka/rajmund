@@ -3,12 +3,22 @@ import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { ArrowLeft, ArrowRight, Plus, Trash2, Package, Boxes, Truck, Check, MapPin } from "lucide-react";
+import { ArrowLeft, ArrowRight, Plus, Trash2, Package, Boxes, Truck, Check, MapPin, Thermometer, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Form,
   FormControl,
@@ -51,10 +61,15 @@ const step1Schema = z.object({
   external_doc_number: z.string().optional(),
   driver_name: z.string().optional(),
   car_plates: z.string().optional(),
-  reception_temp: z.preprocess(
-    (val) => (val === "" || val === undefined ? undefined : Number(val)),
-    z.number().optional()
+  received_temp_c: z.preprocess(
+    (val) => (val === "" || val === undefined || val === null ? undefined : Number(val)),
+    z.number({ required_error: "Pomiar temperatury jest wymagany" })
+      .min(-30, "Min -30°C")
+      .max(30, "Max 30°C")
   ),
+  received_temp_method: z.enum(["VEHICLE_GAUGE", "MANUAL_PROBE", "BOTH"], {
+    required_error: "Wybierz metodę pomiaru",
+  }),
   notes: z.string().optional(),
 });
 
@@ -110,7 +125,8 @@ export default function NewDeliveryPage() {
   const [packagingItems, setPackagingItems] = useState<PackagingItem[]>([]);
   const [step1Data, setStep1Data] = useState<Step1FormValues | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+  const [showCcp1Warning, setShowCcp1Warning] = useState(false);
+
   // Packaging form state
   const [newPackagingType, setNewPackagingType] = useState("");
   const [newPackagingQty, setNewPackagingQty] = useState<number>(0);
@@ -133,7 +149,8 @@ export default function NewDeliveryPage() {
       contractor_id: "",
       facility_id: "",
       external_doc_number: "",
-      reception_temp: undefined,
+      received_temp_c: undefined,
+      received_temp_method: undefined,
       driver_name: "",
       car_plates: "",
     },
@@ -215,6 +232,33 @@ export default function NewDeliveryPage() {
   const handleSubmit = async () => {
     if (!step1Data || items.length === 0) return;
 
+    // CCP1 gate — temperatura > 4°C wymaga decyzji
+    if (step1Data.received_temp_c > 4) {
+      setShowCcp1Warning(true);
+      return;
+    }
+
+    await performSubmit();
+  };
+
+  const handleRejectDelivery = () => {
+    setShowCcp1Warning(false);
+    setItems([]);
+    setPackagingItems([]);
+    setStep1Data(null);
+    step1Form.reset();
+    setStep(1);
+    toast.info("Dostawa odrzucona — dokument nie został zapisany");
+  };
+
+  const handleAcceptWithComplaint = async () => {
+    setShowCcp1Warning(false);
+    await performSubmit({ withComplaintInfo: true });
+  };
+
+  const performSubmit = async (opts?: { withComplaintInfo?: boolean }) => {
+    if (!step1Data || items.length === 0) return;
+
     setIsSubmitting(true);
     try {
       // 1. Generate document number via RPC
@@ -224,7 +268,8 @@ export default function NewDeliveryPage() {
       );
       if (docError) throw docError;
 
-      // 2. Create movement document
+      // 2. Create movement document — trigger CCP1 ustawi ccp1_passed
+      // i wystawi auto-reklamację jeśli temp > 4°C
       const movement = await createMovement.mutateAsync({
         company_id: step1Data.company_id,
         document_number: docNumber,
@@ -232,7 +277,9 @@ export default function NewDeliveryPage() {
         contractor_id: step1Data.contractor_id,
         facility_id: step1Data.facility_id,
         external_doc_number: step1Data.external_doc_number,
-        reception_temp: step1Data.reception_temp,
+        received_temp_c: step1Data.received_temp_c,
+        received_temp_method: step1Data.received_temp_method,
+        reception_temp: step1Data.received_temp_c,
         driver_name: step1Data.driver_name,
         car_plates: step1Data.car_plates,
       });
@@ -281,6 +328,9 @@ export default function NewDeliveryPage() {
       }
 
       toast.success(`Dokument ${docNumber} został utworzony`);
+      if (opts?.withComplaintInfo) {
+        toast.warning("Wystawiono auto-reklamację CCP1 (przekroczenie temperatury)");
+      }
       navigate("/warehouse/deliveries");
     } catch (error) {
       console.error(error);
@@ -415,6 +465,61 @@ export default function NewDeliveryPage() {
 
                 <Separator />
 
+                {/* CCP1 — pomiar temperatury (wymagany) */}
+                <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-4">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <Thermometer className="h-4 w-4 text-primary" />
+                    Kontrola CCP1 — pomiar temperatury (wymagany, próg ≤ +4°C)
+                  </div>
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <FormField
+                      control={step1Form.control}
+                      name="received_temp_c"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Temperatura przyjęcia (°C)*</FormLabel>
+                          <FormControl>
+                            <Input
+                              className="h-12 text-base"
+                              type="number"
+                              step="0.1"
+                              min={-30}
+                              max={30}
+                              placeholder="Np. 2.5"
+                              {...field}
+                              value={field.value ?? ""}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={step1Form.control}
+                      name="received_temp_method"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Metoda pomiaru*</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger className="h-12 text-base">
+                                <SelectValue placeholder="Wybierz metodę" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="VEHICLE_GAUGE">Czujnik pojazdu</SelectItem>
+                              <SelectItem value="MANUAL_PROBE">Sonda ręczna</SelectItem>
+                              <SelectItem value="BOTH">Pomiar podwójny</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
                 <div className="grid gap-6 md:grid-cols-2">
                   <FormField
                     control={step1Form.control}
@@ -429,20 +534,7 @@ export default function NewDeliveryPage() {
                       </FormItem>
                     )}
                   />
-
-                  <FormField
-                    control={step1Form.control}
-                    name="reception_temp"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Temperatura przyjęcia (°C)</FormLabel>
-                        <FormControl>
-                          <Input className="h-12 text-base" type="number" step="0.1" placeholder="Np. 2.5" {...field} value={field.value ?? ""} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div />
                 </div>
 
                 <div className="grid gap-6 md:grid-cols-2">
@@ -499,8 +591,14 @@ export default function NewDeliveryPage() {
                   {contractors?.find((c) => c.id === step1Data.contractor_id)?.name}
                 </Badge>
                 <Badge variant="outline">HDI: {step1Data.external_doc_number || "—"}</Badge>
-                {step1Data.reception_temp && (
-                  <Badge variant="outline">Temp: {step1Data.reception_temp}°C</Badge>
+                {step1Data.received_temp_c !== undefined && (
+                  <Badge
+                    variant="outline"
+                    className={step1Data.received_temp_c > 4 ? "border-destructive text-destructive" : ""}
+                  >
+                    Temp: {step1Data.received_temp_c}°C
+                    {step1Data.received_temp_c > 4 && " ⚠"}
+                  </Badge>
                 )}
               </div>
             </CardContent>
@@ -792,6 +890,39 @@ export default function NewDeliveryPage() {
           </div>
         </>
       )}
+
+      {/* CCP1 — modal warning przy temp > +4°C */}
+      <AlertDialog open={showCcp1Warning} onOpenChange={setShowCcp1Warning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Naruszenie CCP1 — temperatura przekroczona
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span className="block">
+                Zmierzona temperatura przyjęcia{" "}
+                <strong className="text-destructive">
+                  {step1Data?.received_temp_c}°C
+                </strong>{" "}
+                przekracza dopuszczalny próg <strong>+4°C</strong>.
+              </span>
+              <span className="block">
+                Możesz odrzucić dostawę lub przyjąć ją z automatycznym
+                wystawieniem dokumentu reklamacyjnego.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel onClick={handleRejectDelivery} className="bg-destructive text-destructive-foreground hover:bg-destructive/90 border-destructive">
+              Odrzuć dostawę
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleAcceptWithComplaint} className="bg-warning text-warning-foreground hover:bg-warning/90">
+              Przyjmij z reklamacją (auto-dokument)
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -25,6 +25,7 @@ const routeNames: Record<string, string> = {
   "/warehouse/transfers": "Przesunięcia (MM)",
   "/warehouse/transfers/new": "Nowe przesunięcie",
   "/warehouse/packaging": "Saldo Opakowań",
+  "/warehouse/complaints": "Reklamacje dostawców",
   "/production": "Produkcja",
   "/production/orders": "Zlecenia",
   "/production/analytics": "Analiza przepływu",
