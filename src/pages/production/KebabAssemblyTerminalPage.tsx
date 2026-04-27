@@ -69,21 +69,14 @@ export default function KebabAssemblyTerminalPage() {
   // Data - get output batches from closed Processing orders
   const { data: processingOutputs, isLoading: isLoadingBatches } = useProcessingOutputBatches();
   const { data: employees } = useEmployees();
-  const { data: products } = useProducts();
-  const { data: facilities } = useFacilities();
-  const { data: companies } = useCompanies();
-  
+  // Sprint: produkty docelowe (kebaby) — operator wybiera SKU PRZED ważeniem
+  const { data: kebabProducts, isLoading: isLoadingProducts } = useProducts(undefined, "FinishedGood");
+
   // Mutations
   const createOrder = useCreateProductionOrder();
   const createInput = useCreateProductionInput();
   const createLog = useCreateProductionLog();
   const createVariants = useCreateKebabVariants();
-
-  // Get finished goods products (kebab variants)
-  const finishedProducts = useMemo(() => 
-    products?.filter(p => p.industry_category === "FinishedGood") || [],
-    [products]
-  );
 
   // Calculate totals
   const totalAssembled = assembledKebabs.reduce((sum, k) => sum + k.actualWeight, 0);
