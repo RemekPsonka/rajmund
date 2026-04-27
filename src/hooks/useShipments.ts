@@ -299,7 +299,7 @@ export function useUpdateShipment() {
       seal_number?: string;
       linked_invoice_number?: string;
     }) => {
-      const updateData: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      const updateData: Record<string, any> = { updated_at: new Date().toISOString() };
       if (status !== undefined) updateData.status = status;
       if (driver_name !== undefined) updateData.driver_name = driver_name;
       if (truck_plates !== undefined) updateData.truck_plates = truck_plates;
@@ -310,7 +310,7 @@ export function useUpdateShipment() {
 
       const { error } = await supabase
         .from("t_shipments")
-        .update(updateData)
+        .update(updateData as never)
         .eq("id", id);
 
       if (error) throw error;

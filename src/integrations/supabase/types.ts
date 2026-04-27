@@ -47,9 +47,11 @@ export type Database = {
           initial_quantity: number
           internal_batch_number: string
           location_id: string | null
+          parent_batch_id: string | null
           product_id: string
           production_date: string | null
           reception_date: string | null
+          source_event_type: string | null
           status: Database["public"]["Enums"]["batch_status"] | null
           supplier_batch_number: string | null
           supplier_id: string | null
@@ -63,9 +65,11 @@ export type Database = {
           initial_quantity: number
           internal_batch_number: string
           location_id?: string | null
+          parent_batch_id?: string | null
           product_id: string
           production_date?: string | null
           reception_date?: string | null
+          source_event_type?: string | null
           status?: Database["public"]["Enums"]["batch_status"] | null
           supplier_batch_number?: string | null
           supplier_id?: string | null
@@ -79,9 +83,11 @@ export type Database = {
           initial_quantity?: number
           internal_batch_number?: string
           location_id?: string | null
+          parent_batch_id?: string | null
           product_id?: string
           production_date?: string | null
           reception_date?: string | null
+          source_event_type?: string | null
           status?: Database["public"]["Enums"]["batch_status"] | null
           supplier_batch_number?: string | null
           supplier_id?: string | null
@@ -93,6 +99,13 @@ export type Database = {
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "t_storage_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_batches_parent_batch_id_fkey"
+            columns: ["parent_batch_id"]
+            isOneToOne: false
+            referencedRelation: "t_batches"
             referencedColumns: ["id"]
           },
           {
@@ -516,6 +529,64 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "t_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      t_lot_lineage: {
+        Row: {
+          child_lot_id: string
+          created_at: string
+          event_type: string
+          id: string
+          occurred_at: string
+          operator_id: string | null
+          parent_lot_id: string
+          process_ref_id: string | null
+          qty_kg: number
+        }
+        Insert: {
+          child_lot_id: string
+          created_at?: string
+          event_type: string
+          id?: string
+          occurred_at?: string
+          operator_id?: string | null
+          parent_lot_id: string
+          process_ref_id?: string | null
+          qty_kg: number
+        }
+        Update: {
+          child_lot_id?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          occurred_at?: string
+          operator_id?: string | null
+          parent_lot_id?: string
+          process_ref_id?: string | null
+          qty_kg?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "t_lot_lineage_child_lot_id_fkey"
+            columns: ["child_lot_id"]
+            isOneToOne: false
+            referencedRelation: "t_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_lot_lineage_operator_id_fkey"
+            columns: ["operator_id"]
+            isOneToOne: false
+            referencedRelation: "t_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "t_lot_lineage_parent_lot_id_fkey"
+            columns: ["parent_lot_id"]
+            isOneToOne: false
+            referencedRelation: "t_batches"
             referencedColumns: ["id"]
           },
         ]
