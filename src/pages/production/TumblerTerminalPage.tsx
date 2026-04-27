@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   RotateCcw,
   AlertCircle,
+  AlertTriangle,
   Plus,
   Trash2,
   Cog,
@@ -15,6 +16,7 @@ import {
   Play,
   ChefHat,
   CheckCircle2,
+  Circle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -84,6 +86,7 @@ const OUTPUT_DIRECTIONS = [
 ];
 
 const TARE_DEFAULT = 2.0;
+const RECIPE_TOLERANCE_PERCENT = 5;
 
 interface InputItem {
   id: string;
@@ -115,6 +118,7 @@ export default function TumblerTerminalPage() {
   
   // State - Processing (Start procesu)
   const [selectedRecipeId, setSelectedRecipeId] = useState("");
+  const [targetTotalKg, setTargetTotalKg] = useState<number>(100);
   
   // State - Output (Wyjście)
   const [selectedProductId, setSelectedProductId] = useState("");
