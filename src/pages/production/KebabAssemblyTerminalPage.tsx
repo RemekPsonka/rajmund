@@ -29,6 +29,7 @@ import {
   generateOrderNumber,
   useCreateProductionInput,
   useCreateProductionLog,
+  useCloseProductionOrder,
   ProcessingOutputBatch
 } from "@/hooks/useProductionOrders";
 import { useEmployees } from "@/hooks/useEmployees";
