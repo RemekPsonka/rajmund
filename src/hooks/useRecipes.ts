@@ -20,6 +20,8 @@ export interface Recipe {
   base_product?: { name: string; sku: string | null } | null;
 }
 
+export type RecipeIngredientRole = "MEAT" | "SPICE" | "WATER" | "OTHER";
+
 export interface RecipeIngredient {
   id: string;
   recipe_id: string;
@@ -27,6 +29,7 @@ export interface RecipeIngredient {
   ratio: number;
   unit: string;
   amount_per_kg_base: number | null;
+  role: RecipeIngredientRole;
   created_at: string;
   // Joined
   product?: { name: string; sku: string | null; unit: string };
