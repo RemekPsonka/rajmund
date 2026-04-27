@@ -232,6 +232,33 @@ export default function NewDeliveryPage() {
   const handleSubmit = async () => {
     if (!step1Data || items.length === 0) return;
 
+    // CCP1 gate — temperatura > 4°C wymaga decyzji
+    if (step1Data.received_temp_c > 4) {
+      setShowCcp1Warning(true);
+      return;
+    }
+
+    await performSubmit();
+  };
+
+  const handleRejectDelivery = () => {
+    setShowCcp1Warning(false);
+    setItems([]);
+    setPackagingItems([]);
+    setStep1Data(null);
+    step1Form.reset();
+    setStep(1);
+    toast.info("Dostawa odrzucona — dokument nie został zapisany");
+  };
+
+  const handleAcceptWithComplaint = async () => {
+    setShowCcp1Warning(false);
+    await performSubmit({ withComplaintInfo: true });
+  };
+
+  const performSubmit = async (opts?: { withComplaintInfo?: boolean }) => {
+    if (!step1Data || items.length === 0) return;
+
     setIsSubmitting(true);
     try {
       // 1. Generate document number via RPC
@@ -241,7 +268,8 @@ export default function NewDeliveryPage() {
       );
       if (docError) throw docError;
 
-      // 2. Create movement document
+      // 2. Create movement document — trigger CCP1 ustawi ccp1_passed
+      // i wystawi auto-reklamację jeśli temp > 4°C
       const movement = await createMovement.mutateAsync({
         company_id: step1Data.company_id,
         document_number: docNumber,
@@ -249,7 +277,9 @@ export default function NewDeliveryPage() {
         contractor_id: step1Data.contractor_id,
         facility_id: step1Data.facility_id,
         external_doc_number: step1Data.external_doc_number,
-        reception_temp: step1Data.reception_temp,
+        received_temp_c: step1Data.received_temp_c,
+        received_temp_method: step1Data.received_temp_method,
+        reception_temp: step1Data.received_temp_c,
         driver_name: step1Data.driver_name,
         car_plates: step1Data.car_plates,
       });
