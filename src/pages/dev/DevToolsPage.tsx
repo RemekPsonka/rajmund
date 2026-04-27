@@ -95,7 +95,38 @@ interface SimulationResult {
 export default function DevToolsPage() {
   const navigate = useNavigate();
   const [isRunning, setIsRunning] = useState(false);
+  const [isSeeding, setIsSeeding] = useState(false);
+  const [isCleaning, setIsCleaning] = useState(false);
   const [result, setResult] = useState<SimulationResult | null>(null);
+
+  const handleSeedMinimal = async () => {
+    setIsSeeding(true);
+    try {
+      const { data, error } = await supabase.rpc("seed_minimal_demo" as never);
+      if (error) throw error;
+      const r = data as { products_count?: number; employees_count?: number; recipes_count?: number; open_orders?: number };
+      toast.success(
+        `Demo zaseedowane: ${r.products_count ?? 5} produktów, ${r.recipes_count ?? 2} receptury, ${r.employees_count ?? 4} pracowników, ${r.open_orders ?? 1} zlecenie`,
+      );
+    } catch (e: unknown) {
+      toast.error(`Błąd seedowania: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setIsSeeding(false);
+    }
+  };
+
+  const handleCleanupDemo = async () => {
+    setIsCleaning(true);
+    try {
+      const { error } = await supabase.rpc("cleanup_demo_data" as never);
+      if (error) throw error;
+      toast.success("Dane testowe (DEMO) wyczyszczone");
+    } catch (e: unknown) {
+      toast.error(`Błąd czyszczenia: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setIsCleaning(false);
+    }
+  };
 
   const handleRunSimulation = async () => {
     setIsRunning(true);
