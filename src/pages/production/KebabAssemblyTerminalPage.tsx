@@ -39,6 +39,8 @@ import { cn } from "@/lib/utils";
 import { StateMachineBadge } from "@/components/production/StateMachineBadge";
 import { STATE_MACHINES, type AssemblyState } from "@/lib/stateMachines";
 import { useUnsavedChangesWarning } from "@/hooks/useUnsavedChangesWarning";
+import { TerminalHeader } from "@/components/production/TerminalHeader";
+import { TerminalFooter } from "@/components/production/TerminalFooter";
 
 interface AssembledKebab {
   id: string;
@@ -429,7 +431,9 @@ export default function KebabAssemblyTerminalPage() {
   useUnsavedChangesWarning(isDirty);
 
   return (
-    <div className="min-h-screen bg-background p-4">
+    <div className="min-h-screen bg-background pb-[68px]">
+      <TerminalHeader kind="assembly" title={`Składanie kebabu — ${selectedProduct.name}`} icon={ChefHat} onBack={() => navigate(-1)} />
+      <div className="p-4">
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
         <Button variant="outline" size="icon" onClick={() => navigate(-1)}>
@@ -714,6 +718,8 @@ export default function KebabAssemblyTerminalPage() {
           </Button>
         </div>
       </div>
+      </div>
+      <TerminalFooter operator={null} />
     </div>
   );
 }

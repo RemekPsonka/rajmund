@@ -13,6 +13,8 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { TerminalHeader } from "@/components/production/TerminalHeader";
+import { TerminalFooter } from "@/components/production/TerminalFooter";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -208,7 +210,8 @@ export default function PalletizationPage() {
   const selectedFacility = facilities?.find(f => f.id === selectedFacilityId);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col pb-[68px]">
+      <TerminalHeader kind="palletization" title="Paletyzacja" icon={Package} onBack={() => navigate("/production/orders")} />
       {/* Header */}
       <header className="bg-card border-b px-4 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
@@ -571,6 +574,7 @@ export default function PalletizationPage() {
           bestBefore={null}
         />
       )}
+      <TerminalFooter operator={null} />
     </div>
   );
 }

@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Snowflake, User, Scan, Play, Square, Clock, ThermometerSnowflake, AlertTriangle, Save } from "lucide-react";
+import { TerminalHeader } from "@/components/production/TerminalHeader";
+import { TerminalFooter } from "@/components/production/TerminalFooter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -443,7 +445,9 @@ export default function ShockFreezingTerminalPage() {
   useUnsavedChangesWarning(isDirty);
 
   return (
-    <div className="min-h-screen bg-background p-4">
+    <div className="min-h-screen bg-background pb-[68px]">
+      <TerminalHeader kind="freezing" title="Mrożenie szokowe — CCP" icon={Snowflake} onBack={() => navigate(-1)} />
+      <div className="p-4">
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
         <Button variant="outline" size="icon" onClick={() => navigate(-1)}>
@@ -778,6 +782,8 @@ export default function ShockFreezingTerminalPage() {
           </Card>
         </div>
       </div>
+      </div>
+      <TerminalFooter operator={null} />
     </div>
   );
 }
