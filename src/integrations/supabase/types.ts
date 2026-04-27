@@ -1892,6 +1892,7 @@ export type Database = {
         Returns: string
       }
       generate_sscc_number: { Args: { p_company_id: string }; Returns: string }
+      get_lot_lineage: { Args: { lot_id: string }; Returns: Json }
       get_packaging_balance: {
         Args: { p_contractor_id: string; p_packaging_type: string }
         Returns: number
