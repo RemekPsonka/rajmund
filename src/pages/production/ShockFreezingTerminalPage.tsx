@@ -27,6 +27,7 @@ import { pl } from "date-fns/locale";
 import { useProductionOrders, useCreateProductionLog, useUpdateProductionLog, useFreezingLogs, generateOrderNumber, useCreateProductionOrder, useCloseProductionOrder } from "@/hooks/useProductionOrders";
 import { supabase } from "@/integrations/supabase/client";
 import { mockFreezingTempAt } from "@/lib/mockHardware";
+import { FreezingTempChart } from "@/components/production/FreezingTempChart";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useCompanies } from "@/hooks/useCompanies";
 import { useFacilities } from "@/hooks/useFacilities";
@@ -623,6 +624,19 @@ export default function ShockFreezingTerminalPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Live Temperature Curve (first active session) */}
+          {(() => {
+            const activeChartItem = freezingItems.find(
+              i => i.status === "freezing" && i.dbLogId
+            );
+            return activeChartItem?.dbLogId ? (
+              <FreezingTempChart
+                productionLogId={activeChartItem.dbLogId}
+                targetTempC={CCP_THRESHOLD_C}
+              />
+            ) : null;
+          })()}
 
           {/* Freezing Items Table */}
           <Card>
