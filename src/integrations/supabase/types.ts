@@ -426,6 +426,44 @@ export type Database = {
           },
         ]
       }
+      t_freezing_temp_log: {
+        Row: {
+          ambient_temp_c: number | null
+          core_temp_c: number
+          created_at: string
+          id: string
+          production_log_id: string
+          recorded_at: string
+          source: string
+        }
+        Insert: {
+          ambient_temp_c?: number | null
+          core_temp_c: number
+          created_at?: string
+          id?: string
+          production_log_id: string
+          recorded_at?: string
+          source?: string
+        }
+        Update: {
+          ambient_temp_c?: number | null
+          core_temp_c?: number
+          created_at?: string
+          id?: string
+          production_log_id?: string
+          recorded_at?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "t_freezing_temp_log_production_log_id_fkey"
+            columns: ["production_log_id"]
+            isOneToOne: false
+            referencedRelation: "t_production_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       t_handling_units: {
         Row: {
           company_id: string
@@ -813,6 +851,7 @@ export type Database = {
           handling_unit_id: string | null
           id: string
           latest_core_temp_c: number | null
+          max_freezing_minutes: number | null
           output_batch_id: string | null
           packaging_count: number | null
           packaging_type: string | null
@@ -823,6 +862,7 @@ export type Database = {
           recipe_id: string | null
           scale_device_id: string | null
           source_batch_id: string | null
+          target_core_temp_c: number | null
           weight_gross: number
           weight_net: number | null
           weight_tare: number | null
@@ -840,6 +880,7 @@ export type Database = {
           handling_unit_id?: string | null
           id?: string
           latest_core_temp_c?: number | null
+          max_freezing_minutes?: number | null
           output_batch_id?: string | null
           packaging_count?: number | null
           packaging_type?: string | null
@@ -850,6 +891,7 @@ export type Database = {
           recipe_id?: string | null
           scale_device_id?: string | null
           source_batch_id?: string | null
+          target_core_temp_c?: number | null
           weight_gross: number
           weight_net?: number | null
           weight_tare?: number | null
@@ -867,6 +909,7 @@ export type Database = {
           handling_unit_id?: string | null
           id?: string
           latest_core_temp_c?: number | null
+          max_freezing_minutes?: number | null
           output_batch_id?: string | null
           packaging_count?: number | null
           packaging_type?: string | null
@@ -877,6 +920,7 @@ export type Database = {
           recipe_id?: string | null
           scale_device_id?: string | null
           source_batch_id?: string | null
+          target_core_temp_c?: number | null
           weight_gross?: number
           weight_net?: number | null
           weight_tare?: number | null
@@ -1730,6 +1774,7 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           car_plates: string | null
+          ccp1_passed: boolean | null
           company_id: string
           contractor_id: string | null
           created_at: string | null
@@ -1740,6 +1785,8 @@ export type Database = {
           facility_id: string
           id: string
           notes: string | null
+          received_temp_c: number | null
+          received_temp_method: string | null
           reception_temp: number | null
           status: Database["public"]["Enums"]["document_status"] | null
           type: Database["public"]["Enums"]["warehouse_doc_type"] | null
@@ -1749,6 +1796,7 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           car_plates?: string | null
+          ccp1_passed?: boolean | null
           company_id: string
           contractor_id?: string | null
           created_at?: string | null
@@ -1759,6 +1807,8 @@ export type Database = {
           facility_id: string
           id?: string
           notes?: string | null
+          received_temp_c?: number | null
+          received_temp_method?: string | null
           reception_temp?: number | null
           status?: Database["public"]["Enums"]["document_status"] | null
           type?: Database["public"]["Enums"]["warehouse_doc_type"] | null
@@ -1768,6 +1818,7 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           car_plates?: string | null
+          ccp1_passed?: boolean | null
           company_id?: string
           contractor_id?: string | null
           created_at?: string | null
@@ -1778,6 +1829,8 @@ export type Database = {
           facility_id?: string
           id?: string
           notes?: string | null
+          received_temp_c?: number | null
+          received_temp_method?: string | null
           reception_temp?: number | null
           status?: Database["public"]["Enums"]["document_status"] | null
           type?: Database["public"]["Enums"]["warehouse_doc_type"] | null
