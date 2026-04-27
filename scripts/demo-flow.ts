@@ -64,15 +64,19 @@ async function main() {
   if (rpcError) fail(`RPC zwróciło błąd: ${rpcError.message}`);
   ok(`RPC OK — odpowiedź: ${JSON.stringify(rpcData).slice(0, 120)}…`);
 
-  // 1) PZ + CCP1
-  step(1, "Sprawdzam PZ z CCP1 (received_temp_c wypełnione)");
+  // 1) PZ — przyjęcie surowca (CCP1 jest weryfikowane oddzielnie w UI NewDeliveryPage)
+  step(1, "Sprawdzam PZ — przyjęcie surowca");
   const { count: pzCount } = await supabase
+    .from("t_warehouse_movements")
+    .select("id", { count: "exact", head: true })
+    .eq("type", "PZ");
+  if (!pzCount || pzCount < 1) fail("Brak PZ");
+  const { count: pzCcp1 } = await supabase
     .from("t_warehouse_movements")
     .select("id", { count: "exact", head: true })
     .eq("type", "PZ")
     .not("received_temp_c", "is", null);
-  if (!pzCount || pzCount < 1) fail("Brak PZ z CCP1");
-  ok(`PZ z CCP1: ${pzCount}`);
+  ok(`PZ łącznie: ${pzCount} • z pomiarem CCP1: ${pzCcp1 ?? 0}`);
 
   // 2) Rozbiór → partie surowca/filet
   step(2, "Sprawdzam partie po rozbiorze (DISASSEMBLY)");
