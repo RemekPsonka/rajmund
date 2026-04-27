@@ -35,6 +35,7 @@ export interface Product {
   default_expiration_days: number | null;
   min_storage_temp: number | null;
   max_storage_temp: number | null;
+  unit_target_weight_kg: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -49,6 +50,7 @@ export interface ProductFormData {
   default_expiration_days?: number;
   min_storage_temp?: number;
   max_storage_temp?: number;
+  unit_target_weight_kg?: number;
 }
 
 export function useProducts(companyId?: string) {
