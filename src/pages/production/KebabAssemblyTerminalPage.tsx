@@ -241,6 +241,91 @@ export default function KebabAssemblyTerminalPage() {
   // Check if ready to assemble
   const canAssemble = !!(selectedProduct && selectedBatch && createdOrderId && verifiedEmployee);
 
+  // Gate 1: brak zdefiniowanych produktów-wyrobów (kebabów) — pełnoekranowy blocker
+  if (!isLoadingProducts && (!kebabProducts || kebabProducts.length === 0)) {
+    return (
+      <div className="min-h-screen bg-background p-4 flex items-center justify-center">
+        <Card className="max-w-md w-full border-destructive">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-destructive" />
+              Brak produktów typu Kebab
+            </CardTitle>
+            <CardDescription>
+              Nie zdefiniowano żadnego produktu z kategorią „Wyrób gotowy" (kebab).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Dodaj produkt w Ustawienia → Produkty z kategorią „Wyrób gotowy", aby rozpocząć składanie.
+            </p>
+            <Button onClick={() => navigate("/products")} className="w-full">
+              Przejdź do Produktów
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Gate 2: produkt docelowy nie wybrany — selektor jako pierwszy ekran
+  if (!selectedProduct) {
+    return (
+      <div className="min-h-screen bg-background p-4">
+        <div className="flex items-center gap-4 mb-6">
+          <Button variant="outline" size="icon" onClick={() => navigate(-1)}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold">Terminal Składania Kebaba</h1>
+            <p className="text-muted-foreground">Wybierz produkt do składania</p>
+          </div>
+        </div>
+
+        <Card className="max-w-2xl mx-auto">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ChefHat className="h-5 w-5 text-primary" />
+              Produkt docelowy
+            </CardTitle>
+            <CardDescription>
+              Wybierz wariant kebabu, który będzie produkowany w tej sesji. Wybór wpływa na numerację partii (LOT) oraz domyślną wagę szpady.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Select
+              onValueChange={(id) => {
+                const p = kebabProducts?.find((x) => x.id === id) ?? null;
+                setSelectedProduct(p);
+              }}
+            >
+              <SelectTrigger className="h-14 text-lg">
+                <SelectValue placeholder="-- wybierz produkt kebabowy --" />
+              </SelectTrigger>
+              <SelectContent>
+                {kebabProducts?.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{p.name}</span>
+                      {p.sku && (
+                        <span className="text-xs text-muted-foreground font-mono">({p.sku})</span>
+                      )}
+                      {p.unit_target_weight_kg && (
+                        <Badge variant="secondary" className="ml-1">
+                          {Number(p.unit_target_weight_kg)} kg/szpada
+                        </Badge>
+                      )}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   // Render batch selection if no batch selected
   if (!selectedBatch) {
     return (
