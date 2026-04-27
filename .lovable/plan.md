@@ -1,67 +1,86 @@
-# Sprint: Mrożenie szokowe — persystencja + CCP
+# Plan: ostrzeżenie o niezakończonej pracy w terminalach MES (Sprint 2.6)
 
 ## Cel
-Sesje mrożenia są persystowane w `t_production_logs`. Operator wpisuje temperaturę rdzenia, a CCP (≤ -18°C) decyduje o emisji LOT-u przy zamknięciu.
+Operator nie może przypadkiem stracić niezamkniętej partii — przy próbie wyjścia z terminala (sidebar / inne linki / zamknięcie tabu) pojawia się confirm, który NIE blokuje wyjścia, tylko ostrzega.
 
-## Stan obecny vs. brief
-- ✅ Start mrożenia → INSERT do `t_production_logs` z `freezing_started_at`, `source_batch_id`, `production_order_id` (już zrobione, działa).
-- ✅ useEffect przywraca aktywne sesje przy mount (już zrobione).
-- ❌ Brak pól `latest_core_temp_c` i `ccp_passed` w DB.
-- ❌ Brak UI do "POBIERZ TEMPERATURĘ" (input per item).
-- ❌ Zakończenie nie sprawdza CCP ani nie wywołuje `close_production_order_with_lineage`.
+## Ograniczenie techniczne
+Projekt używa klasycznego `BrowserRouter` (nie `createBrowserRouter`), więc `useBlocker` z react-router 6.4+ **nie zadziała**. Muszę użyć kombinacji:
+- `beforeunload` — dla zamknięcia tabu / refresh / nawigacji poza appkę
+- globalny capture-phase listener na klikach w `<a>` elementy (sidebar, linki w aplikacji) — przed obsługą routera, z `confirm()`. Jeżeli operator anuluje → `e.preventDefault()` + `e.stopPropagation()`.
 
-## Pliki
+To rozwiązanie sprawdzone, działa z dowolnym typem routera, nie wymaga refactoru `App.tsx`.
 
-### 1. Migracja — nowe kolumny
-```sql
-ALTER TABLE public.t_production_logs
-  ADD COLUMN IF NOT EXISTS latest_core_temp_c numeric,
-  ADD COLUMN IF NOT EXISTS ccp_passed boolean;
+## Krok 1 — nowy hook `src/hooks/useUnsavedChangesWarning.ts`
 
-COMMENT ON COLUMN public.t_production_logs.latest_core_temp_c IS
-  'Ostatni odczyt temp. rdzenia (°C). Aktualizowany w trakcie mrożenia.';
-COMMENT ON COLUMN public.t_production_logs.ccp_passed IS
-  'Critical Control Point: TRUE jeśli przy zamknięciu temp ≤ -18°C, FALSE jeśli > -18°C, NULL jeśli mrożenie trwa.';
+```ts
+useUnsavedChangesWarning(isDirty: boolean, message?: string): void
 ```
 
-### 2. `src/hooks/useProductionOrders.ts`
-- `useUpdateProductionLog` — rozszerzyć typ payload o `latest_core_temp_c?: number | null` i `ccp_passed?: boolean | null`. Drobne: usunąć obowiązkowy toast.success "Log produkcji zaktualizowany" (zalewa UI przy każdym pomiarze) — przenieść do callera lub uciszyć dla update'ów temp.
+Logika:
+1. `useEffect` zależny od `isDirty`. Jeśli `false` — zwolnij listenery i wyjdź.
+2. Listener `beforeunload`:
+   - `e.preventDefault()`
+   - `e.returnValue = message` (przeglądarki ignorują custom text — pokażą natywny tekst, ale to OK)
+3. Listener `click` w fazie capture na `document`:
+   - znajdź najbliższy `<a href>` przodek targetu
+   - jeśli to link wewnętrzny (host = window.location.host) i href ≠ aktualny pathname:
+     - `if (!window.confirm(message)) { e.preventDefault(); e.stopPropagation(); }`
+   - linki zewnętrzne pomijamy (obsługa przez `beforeunload`)
+4. Cleanup obu listenerów.
 
-### 3. `src/pages/production/ShockFreezingTerminalPage.tsx`
-- `FreezingItem` rozszerzyć o `latestTempC?: number | null`, `ccpPassed?: boolean | null`.
-- Mapper z DB (useEffect ładujący `existingFreezingLogs`) — dopisać te dwa pola z loga.
-- Nowy lokalny state `tempInputs: Record<itemId, string>` do drugiej kolumny inputu temperatury w wierszu tabeli.
-- Nowa funkcja `handleSaveTemperature(itemId)`:
-  - Walidacja: liczba między -50 a 30.
-  - `updateLog.mutateAsync({ id: dbLogId, latest_core_temp_c: value })`.
-  - Update local state itema.
-  - Toast "Zapisano temperaturę: X°C".
-- `handleCompleteFreezing` przerobić:
-  - Wymaga `latestTempC != null` — toast jeśli brak.
-  - `passed = latestTempC <= -18`.
-  - `updateLog.mutateAsync({ id, freezing_completed_at, freezing_duration_minutes, ccp_passed: passed })`.
-  - Jeśli `passed === true`: spróbuj `closeOrder.mutateAsync(productionOrderId)` (RPC `close_production_order_with_lineage`) — emituje LOT.
-  - Jeśli `passed === false`: pozostaw zlecenie Open, dopisz notatkę do zlecenia (`notes += "\n[QC] Mrożenie #X: temp -15°C nie spełnia CCP -18°C"`), toast warning "Wymaga decyzji QC — zlecenie pozostaje otwarte".
-- Tabela: dodać 2 kolumny:
-  - **Temp. rdzenia (°C)**: input number + przycisk "Zapisz" (lub Enter). Pokaż ostatni zapisany odczyt poniżej.
-  - **CCP**: badge "PASS"/"FAIL"/"—" (po zakończeniu). W trakcie mrożenia: kolor temp (niebieski jeśli ≤-18, czerwony jeśli > -18).
-- Item w stanie `completed` z `ccpPassed===false` → wiersz z czerwoną ramką + badge "Wymaga QC".
-- `production_order_id` musi być pamiętany na FreezingItem żeby móc go zamknąć (dziś nie jest — dodać `productionOrderId?: string` do interface i wypełniać przy create+load).
+Domyślny message:
+> „Masz niezakończoną partię. Czy na pewno chcesz wyjść? Postęp zostanie utracony, zlecenie zostanie w bazie ze statusem Open."
 
-## Struktury UI tabeli (po zmianach)
-| Status | Nr Partii | Produkt | Waga | Czas | **Temp** | **CCP** | Akcja |
-|--------|-----------|---------|------|------|----------|---------|-------|
+## Krok 2 — integracja w 4 terminalach
 
-## Acceptance check
-1. F5 nie czyści listy — ✅ (już działa, mapper teraz też czyta `latest_core_temp_c`).
-2. Pola `freezing_started_at`, `latest_core_temp_c`, `freezing_completed_at`, `ccp_passed` widoczne w DB — ✅ po migracji.
-3. Mrożenie z temp -15°C → ccp_passed=false, brak LOT-u, zlecenie Open z notatką — ✅.
-4. Mrożenie z temp -20°C → ccp_passed=true, zlecenie Closed, LOT wyemitowany — ✅.
+Każdy terminal definiuje własną flagę `isDirty` opartą o lokalny state (przed pierwszym zapisem do DB lub między scan/close):
 
-## Pliki dotknięte
-- `supabase/migrations/<ts>_freezing_ccp_fields.sql` (nowy)
-- `src/hooks/useProductionOrders.ts` (typ update)
-- `src/pages/production/ShockFreezingTerminalPage.tsx` (UI + logika)
+### `TumblerTerminalPage.tsx`
+```ts
+const isDirty = !!selectedOrderId && (
+  inputItems.length > 0 ||
+  step === "processing" ||
+  step === "output" ||
+  !!selectedRecipeId
+);
+useUnsavedChangesWarning(isDirty);
+```
 
-## Po sprincie
-Update `mem://features/traceability-logic` o CCP gating LOT-u przy mrożeniu.
+### `WeighingTerminalPage.tsx`
+```ts
+const isDirty = !!selectedOrderId && (
+  weightGross > 0 ||
+  !!selectedProductId ||
+  !!weighingEmployeeId
+);
+useUnsavedChangesWarning(isDirty);
+```
+
+### `KebabAssemblyTerminalPage.tsx`
+```ts
+const isDirty = !!selectedBatch && (
+  !!createdOrderId ||
+  assembledKebabs.length > 0 ||
+  !!verifiedEmployee
+);
+useUnsavedChangesWarning(isDirty);
+```
+
+### `ShockFreezingTerminalPage.tsx`
+```ts
+const isDirty = freezingItems.length > 0; // każda aktywna sesja mrożenia w UI
+useUnsavedChangesWarning(isDirty);
+```
+(uwaga: dla freezingu sesje są persystowane w DB od Sprintu 2.5, więc warning informuje że odejście pozostawi zlecenia w stanie Open bez decyzji CCP — co jest faktem).
+
+## Krok 3 — Acceptance test
+1. Tumbler → wybierz zlecenie + zeskanuj partię → klik „Magazyn" w sidebarze → confirm.
+2. Anuluj → zostajemy. OK → wychodzimy.
+3. Refresh strony / zamknięcie tabu → natywny browser-confirm.
+4. Brak partii / brak wybranego zlecenia → wyjście bez pytania (no-op).
+
+## Pliki
+- **created**: `src/hooks/useUnsavedChangesWarning.ts`
+- **edited**: 4 strony terminali (1 import + 1-2 linie `isDirty` + 1 linia hook)
+
+Brak migracji, brak nowych zależności, brak zmian w `App.tsx`.
