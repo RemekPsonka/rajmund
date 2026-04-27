@@ -14,6 +14,7 @@ import {
   ArrowRight,
   Play,
   ChefHat,
+  CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 
