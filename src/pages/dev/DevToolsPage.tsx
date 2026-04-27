@@ -149,6 +149,9 @@ export default function DevToolsPage() {
         </Badge>
       </div>
 
+      {/* Demo readiness — auto-weryfikacja 9 warunków */}
+      <DemoReadinessChecklist />
+
       {/* Warning */}
       <Card className="border-destructive/50 bg-destructive/5">
         <CardContent className="pt-4">
