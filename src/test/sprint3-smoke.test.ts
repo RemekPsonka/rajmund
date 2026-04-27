@@ -217,7 +217,7 @@ describe("Sprint 3 — useFreezingTempStream zwraca readings posortowane chronol
         return (origOrder as AnyFn)(...args);
       });
       return b as never;
-    });
+    }) as never);
 
     const { useFreezingTempStream } = await import("@/hooks/useFreezingTempStream");
     const { result } = renderHook(() => useFreezingTempStream("log-1"), {
