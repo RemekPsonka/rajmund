@@ -30,6 +30,8 @@ import { useCompanies } from "@/hooks/useCompanies";
 import { useFacilities } from "@/hooks/useFacilities";
 import { useBatches, lookupBatchByCode, getBatchRejectionReason } from "@/hooks/useBatches";
 import { useProducts } from "@/hooks/useProducts";
+import { StateMachineBadge } from "@/components/production/StateMachineBadge";
+import { STATE_MACHINES, type FreezingState } from "@/lib/stateMachines";
 
 const FREEZING_CHAMBERS = [
   { id: "chamber-1", name: "Komora 1 (-35°C)" },
