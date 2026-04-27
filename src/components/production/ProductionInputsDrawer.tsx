@@ -66,13 +66,9 @@ export const ProductionInputsDrawer = React.forwardRef<HTMLDivElement, Productio
   function ProductionInputsDrawer({ open, onClose, orderId }, ref) {
   const { data: order, isLoading: loadingOrder } = useProductionOrder(orderId || undefined);
   const { data: inputs, isLoading: loadingInputs } = useProductionInputs(orderId || undefined);
-  const { data: batches } = useBatches();
+  const { data: availableBatches } = useBatches({ availableOnly: true });
+  const batches = availableBatches;
   const createInput = useCreateProductionInput();
-
-  // Filter only released batches with stock
-  const availableBatches = batches?.filter(
-    (b) => b.status === "Released" && b.current_quantity > 0
-  );
 
   const form = useForm<InputFormValues>({
     resolver: zodResolver(inputSchema),

@@ -87,7 +87,7 @@ export function ProductionOrderDialog({ open, onClose }: ProductionOrderDialogPr
 
   const { data: companies } = useCompanies();
   const { data: facilities } = useFacilities();
-  const { data: batches } = useBatches();
+  const { data: batches } = useBatches({ availableOnly: true });
   const createOrder = useCreateProductionOrder();
   const createTasks = useCreateProductionTasks();
 
