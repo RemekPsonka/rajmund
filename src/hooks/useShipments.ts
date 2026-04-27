@@ -348,8 +348,13 @@ export function useUpdateShipment() {
       queryClient.invalidateQueries({ queryKey: ["shipments"] });
       toast.success("Zaktualizowano wysyłkę");
     },
-    onError: (error) => {
-      toast.error(`Błąd: ${error.message}`);
+    onError: (error: Error) => {
+      if (error.message?.startsWith("Wysyłka niekompletna")) {
+        const lines = error.message.split("\n");
+        toast.error(lines[0], { description: lines.slice(1).join("\n"), duration: 8000 });
+      } else {
+        toast.error(`Błąd: ${error.message}`);
+      }
     },
   });
 }
