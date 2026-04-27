@@ -299,6 +299,15 @@ export default function ShockFreezingTerminalPage() {
         </div>
       </div>
 
+      {/* State Machine */}
+      <div className="mb-4">
+        <StateMachineBadge
+          states={STATE_MACHINES.freezing}
+          current={freezingState}
+          timer={{ stateStartedAt }}
+        />
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Left Column - Context */}
         <div className="space-y-4">
