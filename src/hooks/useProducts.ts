@@ -53,14 +53,18 @@ export interface ProductFormData {
   unit_target_weight_kg?: number;
 }
 
-export function useProducts(companyId?: string) {
+export function useProducts(companyId?: string, industryCategory?: IndustryCategory) {
   return useQuery({
-    queryKey: ["products", companyId],
+    queryKey: ["products", companyId, industryCategory],
     queryFn: async () => {
       let query = supabase.from("t_products").select("*").order("name");
 
       if (companyId) {
         query = query.eq("company_id", companyId);
+      }
+
+      if (industryCategory) {
+        query = query.eq("industry_category", industryCategory);
       }
 
       const { data, error } = await query;
