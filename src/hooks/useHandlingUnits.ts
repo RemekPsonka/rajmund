@@ -248,11 +248,14 @@ export function usePalletContents(palletId: string | undefined) {
 }
 
 // Get unassigned production logs (for adding to pallets)
+// FILTER: tylko logi mrożenia z passed CCP3 (zakończone mrożenie + ccp_passed=true).
+// Nie pokazujemy półproduktów z tumblera/rozbioru — trigger CCP3 i tak zablokuje
+// zamknięcie palety, więc ukrywamy je już w UI.
 export function useUnassignedProductionLogs(facilityId?: string) {
   return useQuery({
     queryKey: ["unassigned-logs", facilityId],
     queryFn: async () => {
-      let query = supabase
+      const { data, error } = await supabase
         .from("t_production_logs")
         .select(`
           *,
@@ -261,14 +264,15 @@ export function useUnassignedProductionLogs(facilityId?: string) {
           source_batch:t_batches!t_production_logs_source_batch_id_fkey(internal_batch_number)
         `)
         .is("handling_unit_id", null)
+        .eq("process_stage", "ShockFreezing")
+        .eq("ccp_passed", true)
+        .not("freezing_completed_at", "is", null)
         .order("created_at", { ascending: false });
 
-      const { data, error } = await query;
       if (error) throw error;
-      
-      // Filter by facility if needed
+
       if (facilityId) {
-        return data?.filter(log => log.production_order?.facility_id === facilityId) || [];
+        return data?.filter((log) => log.production_order?.facility_id === facilityId) || [];
       }
       return data || [];
     },
