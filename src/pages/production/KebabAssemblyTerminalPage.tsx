@@ -82,6 +82,7 @@ export default function KebabAssemblyTerminalPage() {
   const createInput = useCreateProductionInput();
   const createLog = useCreateProductionLog();
   const createVariants = useCreateKebabVariants();
+  const closeOrder = useCloseProductionOrder();
 
   // Sprint: po wyborze produktu — preset wariantu wagi szpady (jeśli zdefiniowano)
   useEffect(() => {
