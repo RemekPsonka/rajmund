@@ -61,10 +61,15 @@ const step1Schema = z.object({
   external_doc_number: z.string().optional(),
   driver_name: z.string().optional(),
   car_plates: z.string().optional(),
-  reception_temp: z.preprocess(
-    (val) => (val === "" || val === undefined ? undefined : Number(val)),
-    z.number().optional()
+  received_temp_c: z.preprocess(
+    (val) => (val === "" || val === undefined || val === null ? undefined : Number(val)),
+    z.number({ required_error: "Pomiar temperatury jest wymagany" })
+      .min(-30, "Min -30°C")
+      .max(30, "Max 30°C")
   ),
+  received_temp_method: z.enum(["VEHICLE_GAUGE", "MANUAL_PROBE", "BOTH"], {
+    required_error: "Wybierz metodę pomiaru",
+  }),
   notes: z.string().optional(),
 });
 
