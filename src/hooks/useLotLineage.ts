@@ -8,6 +8,9 @@ export interface LineageNode {
   event_type: string;
   qty_kg: number;
   occurred_at: string;
+  is_root?: boolean;
+  is_pallet?: boolean;
+  handling_unit_id?: string | null;
 }
 
 export interface LotLineage {

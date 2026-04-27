@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 import { toast } from "sonner";
-import { ArrowLeft, GitBranch, Package, ArrowUp, ArrowDown } from "lucide-react";
+import { ArrowLeft, GitBranch, Package, ArrowUp, ArrowDown, Truck, Boxes } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useLotLineage, type LineageNode } from "@/hooks/useLotLineage";
@@ -72,18 +72,27 @@ function useCurrentLot(lotId: string | undefined) {
 
 function NodeRow({ node }: { node: LineageNode }) {
   const indent = (node.depth - 1) * 24;
+  const isRoot = node.is_root;
+  const isPallet = node.is_pallet;
+  const Icon = isRoot ? Truck : isPallet ? Boxes : Package;
+
+  const content = (
+    <span className="font-mono text-sm font-medium text-primary hover:underline">
+      {node.lot_code ?? node.lot_id.slice(0, 8)}
+    </span>
+  );
+
   return (
     <div
       className="flex items-center gap-3 py-2 border-l-2 border-border pl-4 ml-2 hover:bg-muted/40 rounded-r transition-colors"
       style={{ marginLeft: indent }}
     >
-      <Package className="h-4 w-4 text-muted-foreground shrink-0" />
-      <Link
-        to={`/genealogia/${node.lot_id}`}
-        className="font-mono text-sm font-medium text-primary hover:underline"
-      >
-        {node.lot_code ?? node.lot_id.slice(0, 8)}
-      </Link>
+      <Icon className={`h-4 w-4 shrink-0 ${isRoot ? "text-blue-600" : isPallet ? "text-amber-600" : "text-muted-foreground"}`} />
+      {isRoot || isPallet ? (
+        content
+      ) : (
+        <Link to={`/genealogia/${node.lot_id}`}>{content}</Link>
+      )}
       <Badge variant={EVENT_VARIANTS[node.event_type] ?? "outline"} className="text-xs">
         {EVENT_LABELS[node.event_type] ?? node.event_type}
       </Badge>
