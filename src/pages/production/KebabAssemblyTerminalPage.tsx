@@ -438,8 +438,12 @@ export default function KebabAssemblyTerminalPage() {
         </Button>
       </div>
 
+      {/* State Machine */}
+      <div className="mb-4">
+        <StateMachineBadge states={STATE_MACHINES.assembly} current={assemblyState} />
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - Context */}
         <div className="space-y-4">
           {/* Selected Batch Info */}
           <Card className="border-primary">
