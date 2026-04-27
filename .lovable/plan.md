@@ -1,50 +1,140 @@
-# Sprint 1 — Live Smoke Test (opcja C, hybryda)
+# Sprint 2 — Tumbler: przycisk "Zakończ partię" + spięcie z Kebab Assembly
 
-Pomijamy: `git tag` (zrobisz sam), tworzenie nowej dostawy (użyjemy istniejących partii surowca z seeda `simulate_full_production_day`).
+## Stan obecny (zweryfikowany)
+- `useCloseProductionOrder` istnieje (src/hooks/useProductionOrders.ts:404), wywołuje RPC `close_production_order_with_lineage`, pokazuje toast w żądanym formacie, invaliduje `production-orders`, `batches`, `lot-lineage`.
+- **Brakuje invalidacji** `processing-output-batches` (faktyczny queryKey użyty w `useProcessingOutputBatches`/Kebab Assembly — brief mówił `processing-outputs`, ale w kodzie jest `processing-output-batches`).
+- `useProductionLogs(orderId)` istnieje (linia 172) — zwraca logi z `weight_gross`.
+- `useProductionInputs(orderId)` istnieje i jest już używany w TumblerTerminalPage (`existingInputs`).
+- Tumbler step "output" ma jeden przycisk "ZATWIERDŹ" zapisujący pojedynczy log; nie ma akcji zamykania zlecenia.
 
-## Etapy
+## Zmiana 1 — `src/hooks/useProductionOrders.ts`
+W `useCloseProductionOrder.onSuccess` dodać:
+```ts
+queryClient.invalidateQueries({ queryKey: ["processing-output-batches"] });
+queryClient.invalidateQueries({ queryKey: ["production-logs"] });
+queryClient.invalidateQueries({ queryKey: ["production-inputs"] });
+```
+(reszta bez zmian — toast i pozostałe invalidacje już są)
 
-### 1. Pre-check (SQL, ~5s)
-- `SELECT id, internal_batch_number, current_quantity, status FROM t_batches WHERE status='Released' AND current_quantity >= 80 ORDER BY created_at DESC LIMIT 5` — wybór jednej partii surowca (RawMeat) do testu.
-- Zapisuję `batch_id` + numer.
+## Zmiana 2 — `src/pages/production/TumblerTerminalPage.tsx`
 
-### 2. Utworzenie zlecenia Decomposition (UI)
-- Nawigacja: `/production/orders`
-- Klik "Nowe zlecenie" → typ Decomposition, dodaj input z partii z kroku 1 (80 kg)
-- Asercja: zlecenie widoczne na liście, status Open
+### Importy (do istniejącego bloku)
+- Z `@/hooks/useProductionOrders`: dodać `useProductionLogs`, `useCloseProductionOrder`.
+- Nowe komponenty shadcn:
+  - `AlertDialog`, `AlertDialogAction`, `AlertDialogCancel`, `AlertDialogContent`, `AlertDialogDescription`, `AlertDialogFooter`, `AlertDialogHeader`, `AlertDialogTitle` z `@/components/ui/alert-dialog`
+  - `Tooltip`, `TooltipContent`, `TooltipProvider`, `TooltipTrigger` z `@/components/ui/tooltip`
+- Ikona `CheckCircle2` z `lucide-react`.
 
-### 3. Logowanie ważenia 60 kg (UI)
-- Nawigacja: `/production/terminal`
-- Login QR pracownika (z seeda) → wybór zlecenia → waga 60 kg (weight_net)
-- Asercja: `t_production_logs` ma nowy rekord (sprawdzam SQL)
+### Nowy stan
+```ts
+const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
+```
 
-### 4. Zamknięcie zlecenia (UI)
-- Wróć do zlecenia → "Zamknij zlecenie"
-- Asercja: toast `Zlecenie zamknięte. Partia wynikowa: {numer} (60 kg)`
-- Screenshot toast
+### Nowe hooki w komponencie
+```ts
+const { data: existingLogs } = useProductionLogs(selectedOrderId || undefined);
+const closeOrder = useCloseProductionOrder();
+```
 
-### 5. Weryfikacja output batch + lineage (SQL)
-- `SELECT id, internal_batch_number, current_quantity, status FROM t_batches WHERE source_event_type='DISASSEMBLY' ORDER BY created_at DESC LIMIT 1` — nowa partia 60 kg, Released
-- `SELECT * FROM t_lot_lineage WHERE child_lot_id={new_batch} OR parent_lot_id={new_batch}` — wpis lineage 80 kg DISASSEMBLY
+### Logika włączenia przycisku
+```ts
+const hasInputs = (existingInputs?.length ?? 0) > 0;
+const hasPostWeight = existingLogs?.some(l => Number(l.weight_gross) > 0) ?? false;
+const canFinish = hasInputs && hasPostWeight;
+const finishDisabledReason = !hasInputs
+  ? "Brak wsadu — zeskanuj partię"
+  : !hasPostWeight
+    ? "Brak wagi po-procesowej — zaloguj wagę przed zamknięciem"
+    : null;
+```
 
-### 6. Genealogia w UI
-- Nawigacja: `/warehouse/batches` → klik GitBranch przy nowej partii
-- `/genealogia/{id}`: sekcja Rodzice = partia surowca (DISASSEMBLY, 80 kg), Dzieci = puste
-- Screenshot
+### Handler
+```ts
+const handleConfirmFinish = () => {
+  if (!selectedOrderId) return;
+  closeOrder.mutate(selectedOrderId, {
+    onSuccess: () => {
+      setInputItems([]);
+      setBatchScanCode("");
+      setSelectedRecipeId("");
+      setSelectedOrderId("");
+      setSelectedProductId("");
+      setWeightGross(0);
+      setStep("input");
+      setConfirmCloseOpen(false);
+    },
+    onError: () => {
+      // toast obsłużony przez hook; dialog zamykamy, stan zachowujemy
+      setConfirmCloseOpen(false);
+    },
+  });
+};
+```
+(Brief wymienia `setPostWeights([])` i `setSelectedRecipe(null)` — w obecnym kodzie nie ma takich stanów; mapuję na realne odpowiedniki: `setSelectedRecipeId("")` i lokalny reset wagi/produktu. `selectedMachine` i `verifiedEmployee` celowo zostają, żeby operator nie musiał logować się ponownie do następnego zlecenia.)
 
-### 7. Test Blocked w Tumbler (UI)
-- SQL: `UPDATE t_batches SET status='Blocked' WHERE id={raw_batch_id}` (przez `useUpdateBatchStatus` z UI batches lub bezpośrednim SQL — szybciej SQL przez migrację, ale tu wystarczy zmiana w UI: BatchesPage → zmień status)
-- Nawigacja: `/production/tumbler`
-- Wpisz/zeskanuj numer zablokowanej partii
-- Asercja: czerwony toast `Partia ZABLOKOWANA — nie można użyć w produkcji`
-- Screenshot
+### UI — gdzie wstawić przycisk
+W kroku "output" (sekcja `lg:col-span-3` grid), nad lub pod kartą "Skala & Submit" dodać pełnowidthowy blok:
+```tsx
+<div className="lg:col-span-3">
+  <TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="block">
+          <Button
+            className="w-full h-20 text-xl"
+            variant="default"
+            disabled={!canFinish || closeOrder.isPending}
+            onClick={() => setConfirmCloseOpen(true)}
+          >
+            {closeOrder.isPending ? (
+              <><RotateCcw className="h-6 w-6 mr-3 animate-spin" />ZAMYKAM ZLECENIE...</>
+            ) : (
+              <><CheckCircle2 className="h-6 w-6 mr-3" />ZAKOŃCZ PARTIĘ</>
+            )}
+          </Button>
+        </span>
+      </TooltipTrigger>
+      {finishDisabledReason && (
+        <TooltipContent>{finishDisabledReason}</TooltipContent>
+      )}
+    </Tooltip>
+  </TooltipProvider>
+</div>
 
-### 8. Cleanup
-- SQL: przywrócenie statusu partii surowca na Released (żeby seed nie był skażony)
+<AlertDialog open={confirmCloseOpen} onOpenChange={setConfirmCloseOpen}>
+  <AlertDialogContent>
+    <AlertDialogHeader>
+      <AlertDialogTitle>Zakończyć partię tumblera?</AlertDialogTitle>
+      <AlertDialogDescription>
+        Zlecenie zostanie zamknięte i powstanie nowa partia mieszanki. Tej operacji nie da się cofnąć.
+      </AlertDialogDescription>
+    </AlertDialogHeader>
+    <AlertDialogFooter>
+      <AlertDialogCancel disabled={closeOrder.isPending}>Anuluj</AlertDialogCancel>
+      <AlertDialogAction
+        onClick={(e) => { e.preventDefault(); handleConfirmFinish(); }}
+        disabled={closeOrder.isPending}
+      >
+        Tak, zakończ
+      </AlertDialogAction>
+    </AlertDialogFooter>
+  </AlertDialogContent>
+</AlertDialog>
+```
 
-## Deliverable
-Po przejściu wszystkich kroków raport z 3 screenshotami (toast zamknięcia, genealogia, toast Blocked) + krótkie podsumowanie. Jeśli któryś krok padnie — stop, raport co działa, co nie.
+`AlertDialog` można renderować na końcu komponentu (poza siatką step'ów), żeby działał niezależnie od kroku.
 
-## Uwagi
-- Browser tools mogą zawodzić na drag&drop / skanowaniu QR — jeśli login QR pracownika nie zadziała, użyję bezpośrednio API (`supabase.from('t_production_logs').insert`) i przejdę do kroku 4.
-- Wszystkie zmiany danych w bazie testowej są odwracalne (cleanup w kroku 8).
+## Co NIE jest zmieniane
+- Brak nowej RPC, brak nowego hooka.
+- Toast po sukcesie obsługuje wyłącznie `useCloseProductionOrder`.
+- `useProductionInputs`, `useProductionLogs`, filtr `availableOnly` w `useBatches` — bez zmian.
+- `selectedMachine` i `verifiedEmployee` zachowane przy resecie (poprawa UX dla tej samej zmiany pracownika/maszyny).
+
+## Acceptance check (manualny po wdrożeniu)
+1. Tumbler bez wsadu → przycisk disabled, tooltip "Brak wsadu…".
+2. Wsad dodany, brak logu → tooltip "Brak wagi po-procesowej…".
+3. Wsad + log → przycisk aktywny → dialog → "Tak, zakończ" → toast "Zlecenie zamknięte. Partia wynikowa: …".
+4. `/warehouse/batches` — nowa partia Released, source_event_type='TUMBLING'.
+5. `/genealogia/{id}` — Rodzice z badge TUMBLING.
+6. `/production/assembly` — nowa partia w dropdownie wsadów (dzięki invalidacji `processing-output-batches`).
+7. Tumbler po sukcesie: pusty stan kroku "input", maszyna i pracownik zachowane.

@@ -417,6 +417,10 @@ export function useCloseProductionOrder() {
       queryClient.invalidateQueries({ queryKey: ["production-orders"] });
       queryClient.invalidateQueries({ queryKey: ["batches"] });
       queryClient.invalidateQueries({ queryKey: ["lot-lineage"] });
+      // Sprint 2: Kebab Assembly musi natychmiast widzieć nową partię tumblowaną
+      queryClient.invalidateQueries({ queryKey: ["processing-output-batches"] });
+      queryClient.invalidateQueries({ queryKey: ["production-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["production-inputs"] });
 
       const result = data as {
         success: boolean;
