@@ -1,32 +1,50 @@
-## Cel
-Plik `src/test/sprint1-smoke.test.ts` z 4 testami integracyjnymi Vitest weryfikującymi zamknięcie Sprint 1.
+# Sprint 1 — Live Smoke Test (opcja C, hybryda)
 
-## Kontekst i strategia
+Pomijamy: `git tag` (zrobisz sam), tworzenie nowej dostawy (użyjemy istniejących partii surowca z seeda `simulate_full_production_day`).
 
-Konfiguracja Vitest + jsdom + setup już istnieje (`vitest.config.ts`, `src/test/setup.ts`, skrypt `npm run test`). Brak dedykowanej test-instancji Supabase, więc — zgodnie z briefem ("Możesz mockować supabase client jeśli prościej") — mockujemy `@/integrations/supabase/client` na poziomie `vi.mock`, sterując zwrotami przez stan globalny ustawiany w każdym `it`. Każdy `beforeEach` resetuje stan = pełna determinizm.
+## Etapy
 
-## Plik `src/test/sprint1-smoke.test.ts`
+### 1. Pre-check (SQL, ~5s)
+- `SELECT id, internal_batch_number, current_quantity, status FROM t_batches WHERE status='Released' AND current_quantity >= 80 ORDER BY created_at DESC LIMIT 5` — wybór jednej partii surowca (RawMeat) do testu.
+- Zapisuję `batch_id` + numer.
 
-Moduły:
-- `vi.mock("@/integrations/supabase/client", ...)` — fluent builder odpowiadający na `from().select().eq().gt().or().order().maybeSingle()` i awaitable; `rpc(name, args)` zwraca przygotowane payloady.
-- `vi.mock("sonner", ...)` — neutralne `toast`.
-- Wrapper React Query (`QueryClientProvider`) tworzony per test; `retry: false`, `gcTime: 0`.
+### 2. Utworzenie zlecenia Decomposition (UI)
+- Nawigacja: `/production/orders`
+- Klik "Nowe zlecenie" → typ Decomposition, dodaj input z partii z kroku 1 (80 kg)
+- Asercja: zlecenie widoczne na liście, status Open
 
-### Test 1 — "Migracja t_lot_lineage istnieje"
-Stub `from("information_schema.columns")` zwraca listę wszystkich wymaganych kolumn (`id, parent_lot_id, child_lot_id, event_type, qty_kg, process_ref_id, operator_id, occurred_at, created_at`). Asercja: każda wymagana kolumna obecna w odpowiedzi.
+### 3. Logowanie ważenia 60 kg (UI)
+- Nawigacja: `/production/terminal`
+- Login QR pracownika (z seeda) → wybór zlecenia → waga 60 kg (weight_net)
+- Asercja: `t_production_logs` ma nowy rekord (sprawdzam SQL)
 
-### Test 2 — "close_production_order_with_lineage zwraca output_batch + lineage"
-Stub `rpc` weryfikuje, że nazwa = `close_production_order_with_lineage` i argumenty `{ p_order_id }`. Zwraca payload `{ success: true, output_batch_id, logs_updated: 1, lineage_entries_created: 1, total_weight_kg: 50, event_type: "DISASSEMBLY", ... }`. Asercje: success === true, output_batch_id zdefiniowany, logs_updated > 0, lineage_entries_created > 0, total_weight_kg = 50.
+### 4. Zamknięcie zlecenia (UI)
+- Wróć do zlecenia → "Zamknij zlecenie"
+- Asercja: toast `Zlecenie zamknięte. Partia wynikowa: {numer} (60 kg)`
+- Screenshot toast
 
-### Test 3 — "useLotLineage zwraca drzewo dla nowej partii"
-Stub `rpc("get_lot_lineage")` → `{ ancestors: [{lot_id, lot_code, depth: 1, event_type: "DISASSEMBLY", qty_kg: 50, occurred_at}], descendants: [] }`. Renderujemy `useLotLineage("child-lot-id")` w `QueryClientProvider`. Asercje: `data.ancestors.length === 1`, ancestor.lot_id zgodny, `descendants` puste.
+### 5. Weryfikacja output batch + lineage (SQL)
+- `SELECT id, internal_batch_number, current_quantity, status FROM t_batches WHERE source_event_type='DISASSEMBLY' ORDER BY created_at DESC LIMIT 1` — nowa partia 60 kg, Released
+- `SELECT * FROM t_lot_lineage WHERE child_lot_id={new_batch} OR parent_lot_id={new_batch}` — wpis lineage 80 kg DISASSEMBLY
 
-### Test 4 — "availableOnly w useBatches wyklucza Blocked"
-Stub `from("t_batches")` zwraca już przefiltrowaną listę (symulacja filtra serwerowego). Renderujemy `useBatches({ availableOnly: true })`. Asercje: 1 element, status === "Released", brak Blocked.
+### 6. Genealogia w UI
+- Nawigacja: `/warehouse/batches` → klik GitBranch przy nowej partii
+- `/genealogia/{id}`: sekcja Rodzice = partia surowca (DISASSEMBLY, 80 kg), Dzieci = puste
+- Screenshot
 
-Dodatkowy bonus — unit test `getBatchRejectionReason` (Blocked/Quarantine/expired/null), który zabezpiecza komunikaty UI z poprzedniego sprintu.
+### 7. Test Blocked w Tumbler (UI)
+- SQL: `UPDATE t_batches SET status='Blocked' WHERE id={raw_batch_id}` (przez `useUpdateBatchStatus` z UI batches lub bezpośrednim SQL — szybciej SQL przez migrację, ale tu wystarczy zmiana w UI: BatchesPage → zmień status)
+- Nawigacja: `/production/tumbler`
+- Wpisz/zeskanuj numer zablokowanej partii
+- Asercja: czerwony toast `Partia ZABLOKOWANA — nie można użyć w produkcji`
+- Screenshot
 
-## Acceptance criteria
-- 4 (faktycznie 5 z bonusem) zielone testy uruchomione przez `npm run test`.
-- `beforeEach` resetuje mocki — żaden test nie dziedziczy stanu po innym.
-- Bez modyfikacji innych plików.
+### 8. Cleanup
+- SQL: przywrócenie statusu partii surowca na Released (żeby seed nie był skażony)
+
+## Deliverable
+Po przejściu wszystkich kroków raport z 3 screenshotami (toast zamknięcia, genealogia, toast Blocked) + krótkie podsumowanie. Jeśli któryś krok padnie — stop, raport co działa, co nie.
+
+## Uwagi
+- Browser tools mogą zawodzić na drag&drop / skanowaniu QR — jeśli login QR pracownika nie zadziała, użyję bezpośrednio API (`supabase.from('t_production_logs').insert`) i przejdę do kroku 4.
+- Wszystkie zmiany danych w bazie testowej są odwracalne (cleanup w kroku 8).
