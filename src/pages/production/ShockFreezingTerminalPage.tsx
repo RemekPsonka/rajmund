@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Snowflake, User, Scan, Play, Square, Clock, ThermometerSnowflake, AlertTriangle, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
