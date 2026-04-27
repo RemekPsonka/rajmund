@@ -23,6 +23,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumPad } from "@/components/ui/NumPad";
+import { TerminalHeader } from "@/components/production/TerminalHeader";
+import { TerminalFooter } from "@/components/production/TerminalFooter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -466,7 +468,8 @@ export default function TumblerTerminalPage() {
   useUnsavedChangesWarning(isDirty);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col pb-[68px]">
+      <TerminalHeader kind="tumbler" title="Terminal Masowni" icon={Cog} onBack={() => navigate("/production/orders")} />
       {/* Header */}
       <header className="bg-card border-b px-4 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
@@ -1198,6 +1201,7 @@ export default function TumblerTerminalPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <TerminalFooter operator={null} />
     </div>
   );
 }
