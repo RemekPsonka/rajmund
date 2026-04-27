@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { mockScaleRead, sleep } from "@/lib/mockHardware";
+import { TerminalHeader } from "@/components/production/TerminalHeader";
+import { TerminalFooter } from "@/components/production/TerminalFooter";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -182,7 +184,8 @@ export default function WeighingTerminalPage() {
   useUnsavedChangesWarning(isDirty);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col pb-[68px]">
+      <TerminalHeader kind="weighing" title="Terminal Wagowy" icon={Scale} onBack={() => navigate("/")} />
       {/* Header */}
       <header className="bg-card border-b px-4 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
@@ -559,6 +562,7 @@ export default function WeighingTerminalPage() {
           )}
         </div>
       </main>
+      <TerminalFooter operator={null} />
     </div>
   );
 }
