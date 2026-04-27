@@ -1,139 +1,117 @@
-# Sprint — Selektor produktu docelowego w Kebab Assembly
+# Sprint: State Machine Badge w terminalach produkcyjnych
 
-## Stan zastany
-- `KebabAssemblyTerminalPage.tsx:195` — hardcode `outputProductId = finishedProducts[0]?.id`. Jeśli więcej niż jeden FinishedGood w bazie, każda partia trafia na pierwszy produkt z listy. Krytyczny błąd dla multi-SKU.
-- `useProducts()` w `src/hooks/useProducts.ts` — brak filtra po kategorii.
-- W `t_products` istnieje już kolumna `industry_category text` z wartościami enum-like (`'FinishedGood'`, `'RawMeat'`, `'SemiFinished'`, `'Spice'`, `'Waste'`, `'Packaging'`, `'Casing'`, `'Additive'`). Symulator (`simulate_full_production_day`) tworzy kebab jako `industry_category='FinishedGood'`.
-- Brak kolumn `unit_target_weight_kg` ani `product_category` w `t_products`.
+## Cel
+Każdy z 4 terminali (Weighing, Tumbler, KebabAssembly, ShockFreezing) pokazuje operatorowi gdzie jest w procesie. Tumbler i Freezing dodatkowo pokazują timer w bieżącym stanie.
 
-## Decyzje (odchyłka od briefu — uzasadnienie)
+## Pliki do utworzenia
 
-1. **Nie dodaję `product_category`** — w `t_products.industry_category` istnieje już taksonomia produktów (8 wartości, pamięć `industry-product-categories`). Dodawanie równoległej kolumny `product_category text CHECK IN (...)` wymagałoby zmapowania wszystkich istniejących wpisów, dwóch źródeł prawdy o kategorii i przepisania listy produktów. Zamiast tego filtruję `industry_category = 'FinishedGood'` (jedyna kategoria semantycznie odpowiadająca "kebab gotowy do złożenia w słupek"). Operator nazywa je w UI "produktem kebabowym", w bazie pozostaje `FinishedGood`.
-2. **Dodaję `unit_target_weight_kg numeric NULL`** w `t_products` migracją. Bez tego nie da się powiązać produktu z wagą docelową szpady. Default brak (NULL) → fallback do obecnego `KEBAB_WEIGHT_VARIANTS`.
+### 1. `src/lib/stateMachines.ts`
+Jedno źródło prawdy dla 4 maszyn stanów (literal tuples → typed unions):
 
-## Zmiany
-
-### 1. Migracja SQL
-Plik: `supabase/migrations/<ts>_add_unit_target_weight_to_products.sql`
-```sql
-ALTER TABLE public.t_products
-  ADD COLUMN IF NOT EXISTS unit_target_weight_kg numeric NULL;
-
-COMMENT ON COLUMN public.t_products.unit_target_weight_kg IS
-  'Domyślna waga jednostkowa wyrobu (np. szpady kebabu) w kg. Używana jako preset w terminalu składania.';
-```
-
-### 2. `src/hooks/useProducts.ts`
-- Rozszerzyć `Product` o `unit_target_weight_kg: number | null`.
-- Rozszerzyć `ProductFormData` o `unit_target_weight_kg?: number`.
-- `useProducts` przyjmuje opcjonalny drugi argument: `useProducts(companyId?: string, industryCategory?: IndustryCategory)` — gdy podany, dorzuca `.eq('industry_category', industryCategory)` do query, queryKey rozszerzony o `industryCategory`.
-
-### 3. `src/pages/production/KebabAssemblyTerminalPage.tsx`
-
-**Nowy stan:**
 ```ts
-const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+export const STATE_MACHINES = {
+  weighing:  ['Pending','Tare_Read','Gross_Read','Confirmed','Transferred'],
+  tumbling:  ['Idle','Loading','Loaded','Mixing','Resting','Done','Discharging','Closed'],
+  assembly:  ['Setup','Producing','Quality_Check','Done','Labeled','Closed'],
+  freezing:  ['Loading','Freezing','Stabilizing','Verified','Released'],
+} as const;
+
+export type WeighingState = typeof STATE_MACHINES.weighing[number];
+export type TumblingState = typeof STATE_MACHINES.tumbling[number];
+export type AssemblyState = typeof STATE_MACHINES.assembly[number];
+export type FreezingState = typeof STATE_MACHINES.freezing[number];
 ```
 
-**Nowy hook:**
+Dodatkowo etykiety PL (system jest po polsku — patrz Core memory) jako mapa `STATE_LABELS_PL` per maszyna; badge renderuje labelkę PL, ale logika operuje na technicznych stanach.
+
+### 2. `src/components/production/StateMachineBadge.tsx`
+Reusable stepper. Props:
 ```ts
-const { data: kebabProducts, isLoading: isLoadingProducts } =
-  useProducts(undefined, 'FinishedGood');
-```
-
-**Usunięcia:**
-- `useMemo finishedProducts` (oparte na `industry_category === "FinishedGood"`).
-- Linia 195: `const outputProductId = finishedProducts[0]?.id || …` → użyć `selectedProduct.id` (gwarantowane non-null bo `canAssemble` to wymusza).
-
-**Nowa sekcja UI — selektor produktu** (renderowana PRZED `if (!selectedBatch)` flow, jako pierwszy gate):
-
-```tsx
-// Gate 1: brak produktów kebabowych w bazie
-if (!isLoadingProducts && (!kebabProducts || kebabProducts.length === 0)) {
-  return (
-    <div className="min-h-screen bg-background p-4 flex items-center justify-center">
-      <Card className="max-w-md">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-destructive" />
-            Brak produktów kebabowych
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-muted-foreground">
-            Nie zdefiniowano żadnego produktu z kategorią "Wyrób gotowy" (kebab).
-            Dodaj produkt w Ustawieniach przed rozpoczęciem składania.
-          </p>
-          <Button onClick={() => navigate('/products')} className="w-full">
-            Przejdź do Produktów
-          </Button>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-// Gate 2: produkt nie wybrany
-if (!selectedProduct) {
-  return (
-    <div className="min-h-screen bg-background p-4">
-      <header>...</header>
-      <Card className="max-w-2xl mx-auto">
-        <CardHeader>
-          <CardTitle>Wybierz produkt do składania</CardTitle>
-          <CardDescription>
-            Wybierz wariant kebabu, który będzie produkowany w tej sesji.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Select onValueChange={(id) => setSelectedProduct(kebabProducts.find(p => p.id === id) ?? null)}>
-            <SelectTrigger className="h-14 text-lg">
-              <SelectValue placeholder="-- wybierz produkt kebabowy --" />
-            </SelectTrigger>
-            <SelectContent>
-              {kebabProducts.map(p => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.name} {p.unit_target_weight_kg ? `(${p.unit_target_weight_kg} kg/szpada)` : ''}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
-    </div>
-  );
+{
+  states: readonly string[];
+  current: string;
+  labels?: Record<string, string>;   // opcjonalna mapa PL
+  timer?: { stateStartedAt: number } // tylko dla Tumbler/Freezing
 }
 ```
 
-Po wybraniu — wszystko działa jak dotychczas, ale:
-- **Domyślny wariant wagi**: `useEffect(() => { if (selectedProduct?.unit_target_weight_kg) setSelectedVariant(selectedProduct.unit_target_weight_kg); }, [selectedProduct])`.
-- **Tytuł sekcji "Ważenie Słupka"** → `Składanie kebabu — {selectedProduct.name}`.
-- **Header** dostaje badge z nazwą produktu i przycisk "Zmień produkt" (reset `selectedProduct`, `selectedBatch`, `assembledKebabs`).
-- **`product_id` w logach** → `selectedProduct.id` (zamiast `finishedProducts[0]?.id`).
-- **LOT prefix**: dziś numerację partii wynikowej generuje `close_production_order_with_lineage` przez `generate_batch_number(product_id)`, która używa `t_products.sku`. Wybór produktu → inny SKU → automatycznie inny prefix LOT. Brak dodatkowej zmiany w RPC.
+Render: poziomy rząd pillsów (flex, wrap), separator chevron między nimi.
+- przeszłe: `bg-muted text-muted-foreground` + ikona `Check` (lucide)
+- aktywny: `bg-primary text-primary-foreground` + opcjonalny timer "MM:SS" w pillu
+- przyszłe: `bg-muted/40 text-muted-foreground/60`
+- responsywne: na sm- ukrywamy ikony chevron, na xs- skracamy do "current / total" jako fallback
 
-**`canAssemble` rozszerzone:**
-```ts
-const canAssemble = !!(selectedProduct && selectedBatch && createdOrderId && verifiedEmployee);
-```
+Timer: wewnętrzny `useEffect` z `setInterval(1000)` aktualizujący sformatowany string `mm:ss` (lub `hh:mm:ss` po godzinie) — czyści interwał w cleanup.
 
-**Reset po `handleSaveAll`:**
-```ts
-setAssembledKebabs([]);
-setSelectedBatch(null);
-setCreatedOrderId(null);
-// selectedProduct ZOSTAJE — operator zwykle składa kilka partii tego samego SKU pod rząd
-```
-("Zmień produkt" w headerze dla zmiany SKU.)
+## Mapowanie UI → state per terminal
 
-## Acceptance check
-1. `/production/assembly` z 0 FinishedGood → blocker z linkiem do `/products`. ✅
-2. ≥1 FinishedGood, brak wyboru → ekran z Selectem, reszta UI niedostępna. ✅
-3. Wybór produktu → odblokowuje pełny flow (wybór partii → pracownik → ważenie). ✅
-4. 2 partie z różnymi SKU → różne `product_id` w `t_batches` (i różne prefiksy LOT przez `generate_batch_number`). ✅
-5. Brak `finishedProducts[0]` w pliku. ✅
+### Weighing (`WeighingTerminalPage.tsx`)
+Derivacja stanu z istniejącego state'u komponentu:
+- `Pending` — brak `selectedOrderId` lub brak `weighingEmployeeId`
+- `Tare_Read` — operator + zlecenie, `containerCount > 0`, `weightGross == 0`
+- `Gross_Read` — `weightGross > 0`, jeszcze nie zapisano
+- `Confirmed` — po `createLog.isSuccess` (flag z mutacji albo po prostu `logs.length > 0` w bieżącej sesji)
+- `Transferred` — gdy zlecenie ma `status='Closed'` (z bazy)
 
-## Pliki dotykane
-- `supabase/migrations/<ts>_add_unit_target_weight_to_products.sql` (nowy)
-- `src/hooks/useProducts.ts` (rozszerzenie)
-- `src/pages/production/KebabAssemblyTerminalPage.tsx` (przepisanie nagłówka i `outputProductId`)
+### Tumbler (`TumblerTerminalPage.tsx`)
+Mapuję na istniejący `step` + dane:
+- `Idle` — brak `selectedOrderId`
+- `Loading` — `step === 'input'` i `inputItems.length > 0`
+- `Loaded` — `step === 'processing'` (po Save inputs)
+- `Mixing` — `step === 'output'` i brak logów wagowych (operator masuje)
+- `Resting` — heurystyka: brak — pomijam pierwsza wersja zostawi tylko `Mixing → Done` (bo UI nie ma osobnego "rest"); dokumentuję w komentarzu, że Resting/Discharging to placeholdery przyszłej rozbudowy hardware
+- `Done` — `step === 'output'` i `existingLogs.length > 0` (jest waga po-procesowa)
+- `Closed` — order.status === 'Closed' (po RPC)
+
+Timer: `stateStartedAt` jako `useState<number>(Date.now())` resetowany w `useEffect([currentState])`.
+
+### KebabAssembly (`KebabAssemblyTerminalPage.tsx`)
+- `Setup` — brak `selectedProduct` lub brak `selectedBatch` lub brak `verifiedEmployee`
+- `Producing` — `canAssemble === true`, `assembledKebabs.length === 0`
+- `Quality_Check` — `assembledKebabs.length > 0`, brak akcji "Zakończ"
+- `Done` — po klikniecie "Zakończ partię" (lokalny flag) — jeśli nie istnieje, pomijam i mapuję tylko na Closed
+- `Labeled` — gdy etykieta wydrukowana (jeśli flow istnieje; inaczej skip)
+- `Closed` — order zamknięty
+
+(Pierwsza iteracja: `Setup → Producing → Quality_Check → Closed`, pozostałe stany pozostają w definicji ale bez triggerów. To jest OK, bo akceptacja mówi "Każdy terminal ma własną logikę mapowania".)
+
+### ShockFreezing (`ShockFreezingTerminalPage.tsx`)
+- `Loading` — `canOperate === false` lub brak `freezingItems`
+- `Freezing` — `activeCount > 0`
+- `Stabilizing` — wszystkie `completed` (activeCount=0, completedCount>0) — czeka na weryfikację
+- `Verified` — placeholder (na razie nieosiągalny bez UI weryfikacji)
+- `Released` — placeholder
+
+Timer: liczony od momentu wejścia w bieżący stan (lokalny `useState`).
+
+## Edycje w terminalach (po jednym patchu na plik)
+
+Każdy plik:
+1. Import: `StateMachineBadge`, `STATE_MACHINES`, etykiety PL.
+2. `useMemo` derive `currentState` z istniejącego state'u (zero nowych źródeł danych).
+3. `useState<number>(Date.now())` + `useEffect([currentState], () => setStateStartedAt(Date.now()))` — tylko Tumbler i Freezing.
+4. Render `<StateMachineBadge states={...} current={currentState} labels={...} timer={...} />` zaraz pod nagłówkiem terminala (nad istniejącą sekcją "Operator/Wybór zlecenia").
+
+## Czego NIE robię
+- Nie trzymam stanu w bazie (zgodnie z briefem) — wyłącznie derive z istniejącego UI state'u + statusu zlecenia z bazy przy wejściu (już ładowany przez hooki).
+- Nie zmieniam istniejącej logiki `step` w TumblerTerminalPage — badge tylko czyta.
+- Nie dodaję migracji.
+- Nie tworzę testów jednostkowych (poza `tsc`).
+
+## Plik do utworzenia / zmiany
+- create `src/lib/stateMachines.ts`
+- create `src/components/production/StateMachineBadge.tsx`
+- edit `src/pages/production/WeighingTerminalPage.tsx`
+- edit `src/pages/production/TumblerTerminalPage.tsx`
+- edit `src/pages/production/KebabAssemblyTerminalPage.tsx`
+- edit `src/pages/production/ShockFreezingTerminalPage.tsx`
+
+## Test (acceptance)
+1. `/production/tumbler` bez wybranego zlecenia → badge "Idle".
+2. Wybór zlecenia + skan partii → "Loading" (timer rusza od 00:00).
+3. Save inputs → "Loaded" (timer reset).
+4. Setup receptury → "Mixing" (timer reset, leci).
+5. Waga po-procesowa → "Done".
+6. "ZAKOŃCZ PARTIĘ" → "Closed".
+7. Analogicznie Weighing/Assembly/Freezing — przejścia per mapowanie wyżej.
+8. `tsc` clean.
