@@ -444,6 +444,16 @@ export default function TumblerTerminalPage() {
     return { active: true, ok: perIngredient.every((p) => p.inTol), perIngredient };
   }, [selectedRecipeId, recipeIngredients, inputItems, targetTotalKg]);
 
+  const recipeOk = !recipeCheck.active || recipeCheck.ok;
+  const canFinish = hasInputs && hasPostWeight && recipeOk;
+  const finishDisabledReason = !hasInputs
+    ? "Brak wsadu — zeskanuj partię"
+    : !hasPostWeight
+      ? "Brak wagi po-procesowej — zaloguj wagę przed zamknięciem"
+      : !recipeOk
+        ? "Wsad niezgodny z recepturą — sprawdź składniki (±5%)"
+        : null;
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
