@@ -98,44 +98,44 @@ async function main() {
   ok(`RPC OK — Kebab Test Factory utworzona (company=${sim.company_id.slice(0, 8)}…)`);
 
   // 1) Surowiec — partia kurczaka 5000kg
-  step(1, "Krok 1: PZ — przyjęcie surowca (Ćwiartka kurczaka)");
+  step(1, "PZ — przyjęcie surowca (Ćwiartka kurczaka)");
   need(sim.raw_batch_id, "raw_batch_id");
   ok(`Partia surowca: ${sim.raw_batch_id.slice(0, 8)}… • ${sim.raw_quantity_kg}kg`);
 
   // 2) Rozbiór: 5000kg surowca → 3000kg mięsa + 1900kg odpadów
-  step(2, "Krok 2: Rozbiór (Decomposition) — 5000kg → 3000kg mięsa + 1900kg odpadów");
+  step(2, "Rozbiór (Decomposition) — 5000kg → 3000kg mięsa + 1900kg odpadów");
   need(sim.meat_batch_id, "meat_batch_id");
   ok(`Partia mięsa: ${sim.meat_batch_id.slice(0, 8)}… • ${sim.meat_quantity_kg}kg`);
 
   // 3) Tumbler: 3000kg mięsa → 3300kg masy (uzysk 110% wg receptury z przyprawami)
-  step(3, "Krok 3: Tumbler (Processing) — masowanie wg receptury (3000→3300kg)");
+  step(3, "Tumbler (Processing) — masowanie wg receptury (3000→3300kg)");
   need(sim.masa_batch_id, "masa_batch_id");
   ok(`Partia masy: ${sim.masa_batch_id.slice(0, 8)}… • ${sim.masa_quantity_kg}kg`);
 
   // 4) Kebab: 3300kg masy → 215 szpad
-  step(4, "Krok 4: Kebab (Assembly) — szpadowanie 3300kg → 215 szpad");
+  step(4, "Kebab (Assembly) — szpadowanie 3300kg → 215 szpad");
   need(sim.kebab_batch_id, "kebab_batch_id");
   ok(`Partia kebabu: ${sim.kebab_batch_id.slice(0, 8)}… • ${sim.kebab_sticks_count} szpad`);
 
   // 5) Mrożenie (mockFreezingTempAtFast w UI; w RPC log Freezing zamknięty z duration=240min)
-  step(5, "Krok 5: Mrożenie szokowe (Freezing) — log zamknięty w bazie");
+  step(5, "Mrożenie szokowe (Freezing) — log zamknięty w bazie");
   // RPC tworzy zlecenie Freezing z log freezing_completed_at=NOW(), duration=240min
   ok(`Zlecenie Freezing utworzone i zamknięte przez RPC`);
 
   // 6) Palety z SSCC mod10
-  step(6, "Krok 6: Paletyzacja — SSCC mod10");
+  step(6, "Paletyzacja — SSCC mod10");
   if (!sim.pallet_ids?.length) fail("Brak pallet_ids w odpowiedzi RPC");
   ok(`Palet utworzonych: ${sim.pallets_created} • ID[0]=${sim.pallet_ids[0].slice(0, 8)}…`);
 
   // 7) Wysyłka WZ
-  step(7, "Krok 7: Wysyłka (Shipment) ze statusem Shipped + kierowca + plates");
+  step(7, "Wysyłka (Shipment) ze statusem Shipped + kierowca + plates");
   need(sim.shipment_id, "shipment_id");
   ok(`Wysyłka: ${sim.shipment_id.slice(0, 8)}… • status=${sim.shipment_status}`);
 
   // 8) Genealogia LOT — RPC SECURITY DEFINER, dostęp anon OK
-  step(8, "Krok 8: Genealogia LOT (RPC get_lot_lineage od kebab_batch_id)");
+  step(8, "Genealogia LOT (RPC get_lot_lineage od kebab_batch_id)");
   const { data: tree, error: treeErr } = await supabase.rpc("get_lot_lineage", {
-    p_batch_id: sim.kebab_batch_id,
+    lot_id: sim.kebab_batch_id,
   });
   if (treeErr) {
     warn(`get_lot_lineage: ${treeErr.message}`);

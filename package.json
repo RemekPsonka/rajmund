@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "demo:flow": "tsx scripts/demo-flow.ts"
+    "demo:flow": "node --import tsx scripts/demo-flow.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
