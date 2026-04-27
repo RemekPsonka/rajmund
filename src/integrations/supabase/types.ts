@@ -747,6 +747,36 @@ export type Database = {
           },
         ]
       }
+      t_print_log: {
+        Row: {
+          document_type: string
+          id: string
+          payload: Json | null
+          printed_at: string
+          printed_by: string | null
+          reference_id: string | null
+          reference_table: string | null
+        }
+        Insert: {
+          document_type: string
+          id?: string
+          payload?: Json | null
+          printed_at?: string
+          printed_by?: string | null
+          reference_id?: string | null
+          reference_table?: string | null
+        }
+        Update: {
+          document_type?: string
+          id?: string
+          payload?: Json | null
+          printed_at?: string
+          printed_by?: string | null
+          reference_id?: string | null
+          reference_table?: string | null
+        }
+        Relationships: []
+      }
       t_production_inputs: {
         Row: {
           batch_id: string

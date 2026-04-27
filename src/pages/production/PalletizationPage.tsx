@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { format } from "date-fns";
 import {
   Plus,
   Package,
@@ -52,6 +53,8 @@ import {
   type HandlingUnit,
 } from "@/hooks/useHandlingUnits";
 import { PalletLabel } from "@/components/production/PalletLabel";
+import { SSCCLabelPreview } from "@/components/production/SSCCLabelPreview";
+import { useLogPrint, useLastPrintForReferences } from "@/hooks/usePrintLog";
 import { cn } from "@/lib/utils";
 
 const TARGET_PALLET_WEIGHT = 900; // kg
@@ -82,6 +85,7 @@ export default function PalletizationPage() {
   const updateStatus = useUpdateHandlingUnitStatus();
   const markLabelPrinted = useMarkLabelPrinted();
   const assignLog = useAssignLogToHandlingUnit();
+  const logPrint = useLogPrint();
 
   // Filter facilities by company
   const filteredFacilities = facilities?.filter(f => f.company_id === selectedCompanyId) || [];
@@ -89,6 +93,15 @@ export default function PalletizationPage() {
   // Open and closed pallets
   const openPallets = pallets?.filter(p => p.status === "Open") || [];
   const closedPallets = pallets?.filter(p => p.status === "Closed") || [];
+
+  // Last print map for "Ostatni wydruk" column
+  const allPalletIds = (pallets ?? []).map(p => p.id);
+  const { data: lastPrintMap } = useLastPrintForReferences(allPalletIds);
+  const formatLastPrint = (palletId: string) => {
+    const ts = lastPrintMap?.[palletId];
+    if (!ts) return "Nie drukowano";
+    try { return format(new Date(ts), "yyyy-MM-dd HH:mm"); } catch { return "—"; }
+  };
 
   // Create new pallet
   const handleCreatePallet = async () => {
@@ -140,11 +153,33 @@ export default function PalletizationPage() {
     }
   };
 
-  // Print label
+  // Print label — otwiera modal podglądu (audyt loguje się dopiero po kliknięciu DRUKUJ w modalu)
   const handlePrintLabel = () => {
+    if (!selectedPallet) return;
     setShowLabelDialog(true);
-    if (selectedPallet) {
+  };
+
+  // Potwierdzenie wydruku z modala SSCC: wpis do t_print_log + flaga label_printed + toast
+  const handleConfirmPrint = async () => {
+    if (!selectedPallet) return;
+    try {
+      await logPrint.mutateAsync({
+        document_type: "SSCC_LABEL",
+        reference_id: selectedPallet.id,
+        reference_table: "t_handling_units",
+        payload: {
+          sscc: selectedPallet.sscc_number,
+          weight_kg: selectedPallet.total_net_weight,
+          items_count: selectedPallet.items_count,
+          production_date: selectedPallet.production_date,
+        },
+      });
       markLabelPrinted.mutate(selectedPallet.id);
+      window.print();
+      toast.success("Wydrukowano etykietę SSCC");
+      setShowLabelDialog(false);
+    } catch (e: unknown) {
+      toast.error("Nie udało się zarejestrować wydruku");
     }
   };
 
@@ -292,6 +327,10 @@ export default function PalletizationPage() {
                           <span>{pallet.total_net_weight.toFixed(1)} kg</span>
                           <span>{TARGET_PALLET_WEIGHT} kg</span>
                         </div>
+                        <div className="mt-1 text-xs text-muted-foreground flex items-center gap-1">
+                          <Printer className="h-3 w-3" />
+                          <span>Ostatni wydruk: {formatLastPrint(pallet.id)}</span>
+                        </div>
                       </CardContent>
                     </Card>
                   ))}
@@ -315,6 +354,9 @@ export default function PalletizationPage() {
                               <span className="text-sm">{pallet.total_net_weight.toFixed(1)} kg</span>
                               {pallet.label_printed && <Printer className="h-4 w-4 text-success" />}
                             </div>
+                          </div>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            Ostatni wydruk: {formatLastPrint(pallet.id)}
                           </div>
                         </CardContent>
                       </Card>
@@ -514,39 +556,21 @@ export default function PalletizationPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Label Preview Dialog */}
-      <Dialog open={showLabelDialog} onOpenChange={setShowLabelDialog}>
-        <DialogContent className="max-w-fit">
-          <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
-              <span>Podgląd etykiety</span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => window.print()}
-              >
-                <Printer className="h-4 w-4 mr-2" />
-                Drukuj
-              </Button>
-            </DialogTitle>
-          </DialogHeader>
-          
-          {selectedPallet && (
-            <div className="flex justify-center p-4 bg-gray-100 rounded-lg">
-              <PalletLabel
-                ref={labelRef}
-                companyName={selectedCompany?.name || ""}
-                ssccNumber={selectedPallet.sscc_number}
-                productSummary={productSummary}
-                totalNetWeight={selectedPallet.total_net_weight}
-                totalGrossWeight={selectedPallet.total_gross_weight}
-                productionDate={selectedPallet.production_date}
-                facilityName={selectedFacility?.name}
-              />
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Label Preview Dialog — etykieta SSCC z QR + audyt do t_print_log */}
+      {selectedPallet && (
+        <SSCCLabelPreview
+          open={showLabelDialog}
+          onClose={() => setShowLabelDialog(false)}
+          onPrint={handleConfirmPrint}
+          isPrinting={logPrint.isPending}
+          sscc={selectedPallet.sscc_number}
+          productName={productSummary[0]?.name}
+          weightKg={selectedPallet.total_net_weight}
+          lotCode={selectedPallet.sscc_number.slice(-6)}
+          productionDate={selectedPallet.production_date}
+          bestBefore={null}
+        />
+      )}
     </div>
   );
 }
