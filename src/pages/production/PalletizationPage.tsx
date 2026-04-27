@@ -53,6 +53,8 @@ import {
   type HandlingUnit,
 } from "@/hooks/useHandlingUnits";
 import { PalletLabel } from "@/components/production/PalletLabel";
+import { SSCCLabelPreview } from "@/components/production/SSCCLabelPreview";
+import { useLogPrint, useLastPrintForReferences } from "@/hooks/usePrintLog";
 import { cn } from "@/lib/utils";
 
 const TARGET_PALLET_WEIGHT = 900; // kg
