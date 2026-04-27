@@ -258,6 +258,16 @@ export default function ShockFreezingTerminalPage() {
         latest_core_temp_c: value,
         silent: true,
       });
+      // Dorzuć wpis do historii pomiarów (krzywa)
+      const { error: insertErr } = await supabase
+        .from("t_freezing_temp_log")
+        .insert({
+          production_log_id: item.dbLogId,
+          core_temp_c: value,
+          source: "manual",
+        });
+      if (insertErr) console.error("Insert manual temp log error:", insertErr);
+
       setFreezingItems(prev =>
         prev.map(i => i.id === itemId ? { ...i, latestTempC: value } : i)
       );
