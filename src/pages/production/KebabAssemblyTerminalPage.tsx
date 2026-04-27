@@ -243,6 +243,13 @@ export default function KebabAssemblyTerminalPage() {
   // Check if ready to assemble
   const canAssemble = !!(selectedProduct && selectedBatch && createdOrderId && verifiedEmployee);
 
+  // State machine (UI-only). Pierwsza iteracja: Setup → Producing → Quality_Check → Closed.
+  const assemblyState: AssemblyState = useMemo(() => {
+    if (!selectedProduct || !selectedBatch || !verifiedEmployee || !createdOrderId) return "Setup";
+    if (assembledKebabs.length === 0) return "Producing";
+    return "Quality_Check";
+  }, [selectedProduct, selectedBatch, verifiedEmployee, createdOrderId, assembledKebabs.length]);
+
   // Gate 1: brak zdefiniowanych produktów-wyrobów (kebabów) — pełnoekranowy blocker
   if (!isLoadingProducts && (!kebabProducts || kebabProducts.length === 0)) {
     return (
