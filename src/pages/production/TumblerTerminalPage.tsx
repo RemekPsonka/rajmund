@@ -37,6 +37,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { StateMachineBadge } from "@/components/production/StateMachineBadge";
+import { STATE_MACHINES, type TumblingState } from "@/lib/stateMachines";
 
 import { useProducts } from "@/hooks/useProducts";
 import { useEmployees } from "@/hooks/useEmployees";
