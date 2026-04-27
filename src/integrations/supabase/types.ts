@@ -2044,6 +2044,7 @@ export type Database = {
         Args: { _action: string; _resource: string; _user_id: string }
         Returns: boolean
       }
+      cleanup_demo_data: { Args: never; Returns: Json }
       close_production_order_with_batches: {
         Args: { p_order_id: string }
         Returns: Json
@@ -2098,6 +2099,7 @@ export type Database = {
         Args: { user_email: string }
         Returns: undefined
       }
+      seed_minimal_demo: { Args: never; Returns: Json }
       simulate_full_production_day: { Args: never; Returns: Json }
     }
     Enums: {
