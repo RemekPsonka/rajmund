@@ -951,9 +951,65 @@ export default function TumblerTerminalPage() {
                 </Button>
               </CardContent>
             </Card>
+
+            {/* Sprint 2: Zakończ partię tumblera (zamknięcie zlecenia + emisja LOT) */}
+            <div className="lg:col-span-3">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="block">
+                      <Button
+                        className="w-full h-20 text-xl"
+                        variant="default"
+                        disabled={!canFinish || closeOrder.isPending}
+                        onClick={() => setConfirmCloseOpen(true)}
+                      >
+                        {closeOrder.isPending ? (
+                          <>
+                            <RotateCcw className="h-6 w-6 mr-3 animate-spin" />
+                            ZAMYKAM ZLECENIE...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="h-6 w-6 mr-3" />
+                            ZAKOŃCZ PARTIĘ
+                          </>
+                        )}
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {finishDisabledReason && (
+                    <TooltipContent>{finishDisabledReason}</TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
+            </div>
           </div>
         )}
       </main>
+
+      <AlertDialog open={confirmCloseOpen} onOpenChange={setConfirmCloseOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Zakończyć partię tumblera?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Zlecenie zostanie zamknięte i powstanie nowa partia mieszanki. Tej operacji nie da się cofnąć.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={closeOrder.isPending}>Anuluj</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleConfirmFinish();
+              }}
+              disabled={closeOrder.isPending}
+            >
+              Tak, zakończ
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
