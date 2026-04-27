@@ -465,6 +465,61 @@ export default function NewDeliveryPage() {
 
                 <Separator />
 
+                {/* CCP1 — pomiar temperatury (wymagany) */}
+                <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-4">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <Thermometer className="h-4 w-4 text-primary" />
+                    Kontrola CCP1 — pomiar temperatury (wymagany, próg ≤ +4°C)
+                  </div>
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <FormField
+                      control={step1Form.control}
+                      name="received_temp_c"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Temperatura przyjęcia (°C)*</FormLabel>
+                          <FormControl>
+                            <Input
+                              className="h-12 text-base"
+                              type="number"
+                              step="0.1"
+                              min={-30}
+                              max={30}
+                              placeholder="Np. 2.5"
+                              {...field}
+                              value={field.value ?? ""}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={step1Form.control}
+                      name="received_temp_method"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Metoda pomiaru*</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger className="h-12 text-base">
+                                <SelectValue placeholder="Wybierz metodę" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="VEHICLE_GAUGE">Czujnik pojazdu</SelectItem>
+                              <SelectItem value="MANUAL_PROBE">Sonda ręczna</SelectItem>
+                              <SelectItem value="BOTH">Pomiar podwójny</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
                 <div className="grid gap-6 md:grid-cols-2">
                   <FormField
                     control={step1Form.control}
@@ -479,20 +534,7 @@ export default function NewDeliveryPage() {
                       </FormItem>
                     )}
                   />
-
-                  <FormField
-                    control={step1Form.control}
-                    name="reception_temp"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Temperatura przyjęcia (°C)</FormLabel>
-                        <FormControl>
-                          <Input className="h-12 text-base" type="number" step="0.1" placeholder="Np. 2.5" {...field} value={field.value ?? ""} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div />
                 </div>
 
                 <div className="grid gap-6 md:grid-cols-2">
