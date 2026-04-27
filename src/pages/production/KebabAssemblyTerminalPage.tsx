@@ -35,6 +35,8 @@ import { useEmployees } from "@/hooks/useEmployees";
 import { useProducts, type Product } from "@/hooks/useProducts";
 import { KEBAB_WEIGHT_VARIANTS, useCreateKebabVariants } from "@/hooks/useKebabVariants";
 import { cn } from "@/lib/utils";
+import { StateMachineBadge } from "@/components/production/StateMachineBadge";
+import { STATE_MACHINES, type AssemblyState } from "@/lib/stateMachines";
 
 interface AssembledKebab {
   id: string;
