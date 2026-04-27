@@ -79,6 +79,13 @@ export default function KebabAssemblyTerminalPage() {
   const createLog = useCreateProductionLog();
   const createVariants = useCreateKebabVariants();
 
+  // Sprint: po wyborze produktu — preset wariantu wagi szpady (jeśli zdefiniowano)
+  useEffect(() => {
+    if (selectedProduct?.unit_target_weight_kg) {
+      setSelectedVariant(Number(selectedProduct.unit_target_weight_kg));
+    }
+  }, [selectedProduct]);
+
   // Calculate totals
   const totalAssembled = assembledKebabs.reduce((sum, k) => sum + k.actualWeight, 0);
   const totalCount = assembledKebabs.reduce((sum, k) => sum + k.quantity, 0);
