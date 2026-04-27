@@ -72,6 +72,7 @@ const warehouseItems = [
   { title: "Ewidencja Partii", url: "/warehouse/batches", icon: Layers },
   { title: "Przesunięcia (MM)", url: "/warehouse/transfers", icon: ArrowRightLeft },
   { title: "Saldo Opakowań", url: "/warehouse/packaging", icon: Boxes },
+  { title: "Reklamacje", url: "/warehouse/complaints", icon: PackageCheck },
 ];
 
 const productionItems = [
