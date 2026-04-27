@@ -292,10 +292,13 @@ export function useUpdateProductionLog() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, ...data }: { 
-      id: string; 
+    mutationFn: async ({ id, silent: _silent, ...data }: {
+      id: string;
       freezing_completed_at?: string;
       freezing_duration_minutes?: number;
+      latest_core_temp_c?: number | null;
+      ccp_passed?: boolean | null;
+      silent?: boolean;
     }) => {
       const { data: result, error } = await supabase
         .from("t_production_logs")
@@ -307,10 +310,12 @@ export function useUpdateProductionLog() {
       if (error) throw error;
       return result;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["production-logs"] });
       queryClient.invalidateQueries({ queryKey: ["freezing-logs"] });
-      toast.success("Log produkcji zaktualizowany");
+      if (!variables.silent) {
+        toast.success("Log produkcji zaktualizowany");
+      }
     },
     onError: (error: Error) => {
       toast.error(`Błąd: ${error.message}`);
