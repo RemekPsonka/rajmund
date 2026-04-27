@@ -14,6 +14,7 @@ import {
   ArrowRight,
   Play,
   ChefHat,
+  CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -45,8 +46,26 @@ import {
   useCreateProductionInput,
   useCreateProductionLog,
   useProductionInputs,
+  useProductionLogs,
   useUpdateProductionOrder,
+  useCloseProductionOrder,
 } from "@/hooks/useProductionOrders";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useRecipes, useRecipeIngredients } from "@/hooks/useRecipes";
 import { PROCESSING_DIRECTIONS, type ProcessingDirection } from "@/hooks/useStorageLocations";
 import { cn } from "@/lib/utils";
@@ -105,6 +124,9 @@ export default function TumblerTerminalPage() {
   // State - Step (3 steps now)
   const [step, setStep] = useState<"input" | "processing" | "output">("input");
 
+  // Sprint 2: dialog potwierdzenia zakończenia partii tumblera
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
+
   // Queries
   const { data: orders } = useProductionOrders("Open");
   const processingOrders = orders?.filter(o => o.type === "Processing") || [];
@@ -112,7 +134,8 @@ export default function TumblerTerminalPage() {
   const { data: products } = useProducts();
   const { data: batches } = useBatches({ availableOnly: true });
   const { data: existingInputs } = useProductionInputs(selectedOrderId || undefined);
-  
+  const { data: existingLogs } = useProductionLogs(selectedOrderId || undefined);
+
   // Get company_id from selected order for recipes
   const selectedOrder = processingOrders.find(o => o.id === selectedOrderId);
   const { data: recipes } = useRecipes(selectedOrder?.company_id);
@@ -121,6 +144,7 @@ export default function TumblerTerminalPage() {
   const createInput = useCreateProductionInput();
   const createLog = useCreateProductionLog();
   const updateOrder = useUpdateProductionOrder();
+  const closeOrder = useCloseProductionOrder();
 
   // Finished products for output
   const finishedProducts = products?.filter(p => !p.is_raw_material) || [];
@@ -320,7 +344,36 @@ export default function TumblerTerminalPage() {
     setBatchScanCode("");
   };
 
-  // Calculate theoretical and real yield for selected recipe
+  // Sprint 2: warunki zakończenia partii tumblera
+  const hasInputs = (existingInputs?.length ?? 0) > 0;
+  const hasPostWeight = existingLogs?.some(l => Number(l.weight_gross) > 0) ?? false;
+  const canFinish = hasInputs && hasPostWeight;
+  const finishDisabledReason = !hasInputs
+    ? "Brak wsadu — zeskanuj partię"
+    : !hasPostWeight
+      ? "Brak wagi po-procesowej — zaloguj wagę przed zamknięciem"
+      : null;
+
+  const handleConfirmFinish = () => {
+    if (!selectedOrderId) return;
+    closeOrder.mutate(selectedOrderId, {
+      onSuccess: () => {
+        // Reset stanu terminala — maszyna i pracownik zostają na kolejne zlecenie
+        setInputItems([]);
+        setBatchScanCode("");
+        setSelectedRecipeId("");
+        setSelectedOrderId("");
+        setSelectedProductId("");
+        setWeightGross(0);
+        setStep("input");
+        setConfirmCloseOpen(false);
+      },
+      onError: () => {
+        // Toast obsłużony w hooku; zamykamy dialog, stan zachowujemy do retry
+        setConfirmCloseOpen(false);
+      },
+    });
+  };
   const recipeYieldInfo = useMemo(() => {
     if (!selectedRecipe) return null;
     
@@ -898,9 +951,65 @@ export default function TumblerTerminalPage() {
                 </Button>
               </CardContent>
             </Card>
+
+            {/* Sprint 2: Zakończ partię tumblera (zamknięcie zlecenia + emisja LOT) */}
+            <div className="lg:col-span-3">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="block">
+                      <Button
+                        className="w-full h-20 text-xl"
+                        variant="default"
+                        disabled={!canFinish || closeOrder.isPending}
+                        onClick={() => setConfirmCloseOpen(true)}
+                      >
+                        {closeOrder.isPending ? (
+                          <>
+                            <RotateCcw className="h-6 w-6 mr-3 animate-spin" />
+                            ZAMYKAM ZLECENIE...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="h-6 w-6 mr-3" />
+                            ZAKOŃCZ PARTIĘ
+                          </>
+                        )}
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {finishDisabledReason && (
+                    <TooltipContent>{finishDisabledReason}</TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
+            </div>
           </div>
         )}
       </main>
+
+      <AlertDialog open={confirmCloseOpen} onOpenChange={setConfirmCloseOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Zakończyć partię tumblera?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Zlecenie zostanie zamknięte i powstanie nowa partia mieszanki. Tej operacji nie da się cofnąć.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={closeOrder.isPending}>Anuluj</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleConfirmFinish();
+              }}
+              disabled={closeOrder.isPending}
+            >
+              Tak, zakończ
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
