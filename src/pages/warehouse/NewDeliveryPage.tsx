@@ -125,7 +125,8 @@ export default function NewDeliveryPage() {
   const [packagingItems, setPackagingItems] = useState<PackagingItem[]>([]);
   const [step1Data, setStep1Data] = useState<Step1FormValues | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+  const [showCcp1Warning, setShowCcp1Warning] = useState(false);
+
   // Packaging form state
   const [newPackagingType, setNewPackagingType] = useState("");
   const [newPackagingQty, setNewPackagingQty] = useState<number>(0);
@@ -148,7 +149,8 @@ export default function NewDeliveryPage() {
       contractor_id: "",
       facility_id: "",
       external_doc_number: "",
-      reception_temp: undefined,
+      received_temp_c: undefined,
+      received_temp_method: undefined,
       driver_name: "",
       car_plates: "",
     },
