@@ -429,13 +429,21 @@ export function useCloseProductionOrder() {
 
       const result = data as {
         success: boolean;
-        output_batch_number?: string;
-        total_weight_kg?: number;
+        batches_created?: Array<{
+          batch_id: string;
+          batch_number: string;
+          product_id: string;
+          qty_kg: number;
+        }>;
         lineage_entries_created?: number;
       };
-      if (result?.output_batch_number) {
+      const batches = result?.batches_created ?? [];
+      if (batches.length > 0) {
+        const summary = batches
+          .map((b) => `${b.batch_number} (${Number(b.qty_kg).toFixed(1)} kg)`)
+          .join(", ");
         toast.success(
-          `Zlecenie zamknięte. Partia wynikowa: ${result.output_batch_number} (${result.total_weight_kg} kg)`
+          `Zlecenie zamknięte. Utworzono ${batches.length} ${batches.length === 1 ? "partię" : "partii"}: ${summary}`
         );
       } else {
         toast.success("Zlecenie zamknięte.");
