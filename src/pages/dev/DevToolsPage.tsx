@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
+import { DemoReadinessChecklist } from "@/components/dev/DemoReadinessChecklist";
 
 interface SimulationResult {
   success: boolean;
