@@ -33,6 +33,7 @@ import { useBatches, lookupBatchByCode, getBatchRejectionReason } from "@/hooks/
 import { useProducts } from "@/hooks/useProducts";
 import { StateMachineBadge } from "@/components/production/StateMachineBadge";
 import { STATE_MACHINES, type FreezingState } from "@/lib/stateMachines";
+import { useUnsavedChangesWarning } from "@/hooks/useUnsavedChangesWarning";
 
 const FREEZING_CHAMBERS = [
   { id: "chamber-1", name: "Komora 1 (-35°C)" },
@@ -363,6 +364,10 @@ export default function ShockFreezingTerminalPage() {
   useEffect(() => {
     setStateStartedAt(Date.now());
   }, [freezingState]);
+
+  // Sprint 2.6 — ostrzeżenie: aktywne sesje mrożenia w UI = niezakończona praca
+  const isDirty = freezingItems.length > 0;
+  useUnsavedChangesWarning(isDirty);
 
   return (
     <div className="min-h-screen bg-background p-4">

@@ -37,6 +37,7 @@ import { KEBAB_WEIGHT_VARIANTS, useCreateKebabVariants } from "@/hooks/useKebabV
 import { cn } from "@/lib/utils";
 import { StateMachineBadge } from "@/components/production/StateMachineBadge";
 import { STATE_MACHINES, type AssemblyState } from "@/lib/stateMachines";
+import { useUnsavedChangesWarning } from "@/hooks/useUnsavedChangesWarning";
 
 interface AssembledKebab {
   id: string;
@@ -407,6 +408,14 @@ export default function KebabAssemblyTerminalPage() {
       </div>
     );
   }
+
+  // Sprint 2.6 — ostrzeżenie przy wyjściu z niezakończonego montażu kebabów
+  const isDirty = !!selectedBatch && (
+    !!createdOrderId ||
+    assembledKebabs.length > 0 ||
+    !!verifiedEmployee
+  );
+  useUnsavedChangesWarning(isDirty);
 
   return (
     <div className="min-h-screen bg-background p-4">

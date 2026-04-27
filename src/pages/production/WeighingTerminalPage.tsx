@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 
 import { useProducts } from "@/hooks/useProducts";
+import { useUnsavedChangesWarning } from "@/hooks/useUnsavedChangesWarning";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useDevices } from "@/hooks/useDevices";
 import {
@@ -171,6 +172,15 @@ export default function WeighingTerminalPage() {
     const emp = employees?.find((e) => e.id === id);
     return emp ? `${emp.first_name} ${emp.last_name}` : "";
   };
+
+  // Sprint 2.6 — ostrzeżenie przy próbie wyjścia z niezakończoną pracą
+  const isDirty = !!selectedOrderId && (
+    weightGross > 0 ||
+    !!selectedProductId ||
+    !!weighingEmployeeId ||
+    !!preparingEmployeeId
+  );
+  useUnsavedChangesWarning(isDirty);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">

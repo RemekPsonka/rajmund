@@ -40,6 +40,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { StateMachineBadge } from "@/components/production/StateMachineBadge";
+import { useUnsavedChangesWarning } from "@/hooks/useUnsavedChangesWarning";
 import { STATE_MACHINES, type TumblingState } from "@/lib/stateMachines";
 
 import { useProducts } from "@/hooks/useProducts";
@@ -453,6 +454,15 @@ export default function TumblerTerminalPage() {
       : !recipeOk
         ? "Wsad niezgodny z recepturą — sprawdź składniki (±5%)"
         : null;
+
+  // Sprint 2.6 — ostrzeżenie przy próbie wyjścia z niezakończoną partią
+  const isDirty = !!selectedOrderId && (
+    inputItems.length > 0 ||
+    step === "processing" ||
+    step === "output" ||
+    !!selectedRecipeId
+  );
+  useUnsavedChangesWarning(isDirty);
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
