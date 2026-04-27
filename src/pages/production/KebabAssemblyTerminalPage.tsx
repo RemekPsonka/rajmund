@@ -239,7 +239,7 @@ export default function KebabAssemblyTerminalPage() {
   };
 
   // Check if ready to assemble
-  const canAssemble = selectedBatch && createdOrderId && verifiedEmployee;
+  const canAssemble = !!(selectedProduct && selectedBatch && createdOrderId && verifiedEmployee);
 
   // Render batch selection if no batch selected
   if (!selectedBatch) {
