@@ -570,24 +570,40 @@ export default function ShockFreezingTerminalPage() {
                       <TableHead>Nr Partii</TableHead>
                       <TableHead>Produkt</TableHead>
                       <TableHead className="text-right">Waga</TableHead>
-                      <TableHead>Czas mrożenia</TableHead>
+                      <TableHead>Czas</TableHead>
+                      <TableHead>Temp. rdzenia (°C)</TableHead>
+                      <TableHead className="text-center">CCP</TableHead>
                       <TableHead className="text-right">Akcja</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {freezingItems.map(item => (
-                      <TableRow key={item.id}>
+                    {freezingItems.map(item => {
+                      const isFailed = item.status === "completed" && item.ccpPassed === false;
+                      const tempColor =
+                        item.latestTempC == null
+                          ? "text-muted-foreground"
+                          : item.latestTempC <= CCP_THRESHOLD_C
+                            ? "text-blue-500"
+                            : "text-destructive";
+                      return (
+                      <TableRow key={item.id} className={isFailed ? "border-l-4 border-destructive bg-destructive/5" : ""}>
                         <TableCell>
-                          <Badge 
-                            variant={item.status === "freezing" ? "default" : "secondary"}
-                            className={item.status === "freezing" ? "bg-blue-500" : ""}
-                          >
-                            {item.status === "freezing" ? (
-                              <><Snowflake className="h-3 w-3 mr-1 animate-pulse" /> Mrożenie</>
-                            ) : (
-                              "Zakończone"
-                            )}
-                          </Badge>
+                          {isFailed ? (
+                            <Badge variant="destructive">
+                              <AlertTriangle className="h-3 w-3 mr-1" /> Wymaga QC
+                            </Badge>
+                          ) : (
+                            <Badge
+                              variant={item.status === "freezing" ? "default" : "secondary"}
+                              className={item.status === "freezing" ? "bg-blue-500" : ""}
+                            >
+                              {item.status === "freezing" ? (
+                                <><Snowflake className="h-3 w-3 mr-1 animate-pulse" /> Mrożenie</>
+                              ) : (
+                                "Zakończone"
+                              )}
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell className="font-mono">{item.batchNumber}</TableCell>
                         <TableCell>{item.productName}</TableCell>
@@ -600,12 +616,61 @@ export default function ShockFreezingTerminalPage() {
                             {getDuration(item.startedAt)}
                           </div>
                         </TableCell>
+                        <TableCell>
+                          {item.status === "freezing" ? (
+                            <div className="flex flex-col gap-1">
+                              <div className="flex gap-1 items-center">
+                                <Input
+                                  type="number"
+                                  step="0.1"
+                                  placeholder="np. -20"
+                                  className="h-9 w-24 font-mono"
+                                  value={tempInputs[item.id] ?? ""}
+                                  onChange={(e) => setTempInputs(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                  onKeyDown={(e) => e.key === "Enter" && handleSaveTemperature(item.id)}
+                                />
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleSaveTemperature(item.id)}
+                                  disabled={updateLog.isPending}
+                                >
+                                  <Save className="h-3 w-3" />
+                                </Button>
+                              </div>
+                              {item.latestTempC != null && (
+                                <span className={`text-xs font-mono ${tempColor}`}>
+                                  ostatnio: {item.latestTempC}°C
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className={`font-mono ${tempColor}`}>
+                              {item.latestTempC != null ? `${item.latestTempC}°C` : "—"}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {item.status === "completed" ? (
+                            item.ccpPassed === true ? (
+                              <Badge className="bg-success text-success-foreground">PASS</Badge>
+                            ) : item.ccpPassed === false ? (
+                              <Badge variant="destructive">FAIL</Badge>
+                            ) : (
+                              <Badge variant="outline">—</Badge>
+                            )
+                          ) : (
+                            <Badge variant="outline">—</Badge>
+                          )}
+                        </TableCell>
                         <TableCell className="text-right">
                           {item.status === "freezing" && (
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => handleCompleteFreezing(item.id)}
+                              disabled={item.latestTempC == null}
+                              title={item.latestTempC == null ? "Najpierw wpisz temperaturę" : ""}
                             >
                               <Square className="h-4 w-4 mr-1" />
                               Zakończ
@@ -613,7 +678,8 @@ export default function ShockFreezingTerminalPage() {
                           )}
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               )}
