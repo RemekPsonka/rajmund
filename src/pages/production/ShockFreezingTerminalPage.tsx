@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Snowflake, User, Scan, Play, Square, Clock, ThermometerSnowflake } from "lucide-react";
+import { ArrowLeft, Snowflake, User, Scan, Play, Square, Clock, ThermometerSnowflake, AlertTriangle, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,7 +24,8 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 
-import { useProductionOrders, useCreateProductionLog, useUpdateProductionLog, useFreezingLogs, generateOrderNumber, useCreateProductionOrder } from "@/hooks/useProductionOrders";
+import { useProductionOrders, useCreateProductionLog, useUpdateProductionLog, useFreezingLogs, generateOrderNumber, useCreateProductionOrder, useCloseProductionOrder } from "@/hooks/useProductionOrders";
+import { supabase } from "@/integrations/supabase/client";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useCompanies } from "@/hooks/useCompanies";
 import { useFacilities } from "@/hooks/useFacilities";
@@ -39,6 +40,8 @@ const FREEZING_CHAMBERS = [
   { id: "chamber-3", name: "Komora 3 (-40°C)" },
 ];
 
+const CCP_THRESHOLD_C = -18;
+
 interface FreezingItem {
   id: string;
   batchNumber: string;
@@ -46,7 +49,10 @@ interface FreezingItem {
   weight: number;
   startedAt: Date;
   status: "freezing" | "completed";
-  dbLogId?: string; // ID from database
+  dbLogId?: string;
+  productionOrderId?: string;
+  latestTempC?: number | null;
+  ccpPassed?: boolean | null;
 }
 
 export default function ShockFreezingTerminalPage() {
