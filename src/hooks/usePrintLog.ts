@@ -36,7 +36,7 @@ export function useLogPrint() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (data: LogPrintInput) => {
-      const { error } = await supabase.from("t_print_log").insert(data);
+      const { error } = await supabase.from("t_print_log").insert([data]);
       if (error) throw error;
     },
     onSuccess: (_data, vars) => {
