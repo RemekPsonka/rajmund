@@ -275,7 +275,8 @@ export default function ShockFreezingTerminalPage() {
       const startedAtMs = item.startedAt.getTime();
       const id = setInterval(async () => {
         const elapsedSec = (Date.now() - startedAtMs) / 1000;
-        const mockTemp = mockFreezingTempAt(elapsedSec);
+        const isFast = typeof window !== "undefined" && localStorage.getItem("demo_speed") === "fast";
+        const mockTemp = isFast ? mockFreezingTempAtFast(elapsedSec) : mockFreezingTempAt(elapsedSec);
         try {
           const { error: insertErr } = await supabase
             .from("t_freezing_temp_log")
