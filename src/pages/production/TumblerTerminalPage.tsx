@@ -164,6 +164,24 @@ export default function TumblerTerminalPage() {
   // Net weight
   const weightNet = Math.max(0, weightGross - weightTare);
 
+  // ── State machine (UI-only). Mapowanie patrz plan; Resting/Discharging
+  // pozostają w definicji, ale bez triggerów (placeholder przyszłej rozbudowy).
+  const tumblingState: TumblingState = useMemo(() => {
+    if (selectedOrder?.status === "Closed") return "Closed";
+    if (!selectedOrderId) return "Idle";
+    if (step === "output") {
+      return (existingLogs && existingLogs.length > 0) ? "Done" : "Mixing";
+    }
+    if (step === "processing") return "Loaded";
+    // step === 'input'
+    return inputItems.length > 0 ? "Loading" : "Idle";
+  }, [selectedOrder?.status, selectedOrderId, step, existingLogs, inputItems.length]);
+
+  const [stateStartedAt, setStateStartedAt] = useState<number>(() => Date.now());
+  useEffect(() => {
+    setStateStartedAt(Date.now());
+  }, [tumblingState]);
+
   // Verify employee
   const verifyEmployee = useCallback(() => {
     if (!employeeCode.trim()) return;
