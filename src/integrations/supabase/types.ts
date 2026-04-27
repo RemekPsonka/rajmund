@@ -1083,6 +1083,7 @@ export type Database = {
           sku: string | null
           subiekt_id: string | null
           unit: string | null
+          unit_target_weight_kg: number | null
           updated_at: string | null
         }
         Insert: {
@@ -1098,6 +1099,7 @@ export type Database = {
           sku?: string | null
           subiekt_id?: string | null
           unit?: string | null
+          unit_target_weight_kg?: number | null
           updated_at?: string | null
         }
         Update: {
@@ -1113,6 +1115,7 @@ export type Database = {
           sku?: string | null
           subiekt_id?: string | null
           unit?: string | null
+          unit_target_weight_kg?: number | null
           updated_at?: string | null
         }
         Relationships: [
