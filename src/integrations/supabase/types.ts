@@ -573,39 +573,49 @@ export type Database = {
       }
       t_lot_lineage: {
         Row: {
-          child_lot_id: string
+          child_handling_unit_id: string | null
+          child_lot_id: string | null
           created_at: string
           event_type: string
           id: string
           occurred_at: string
           operator_id: string | null
-          parent_lot_id: string
+          parent_lot_id: string | null
           process_ref_id: string | null
           qty_kg: number
         }
         Insert: {
-          child_lot_id: string
+          child_handling_unit_id?: string | null
+          child_lot_id?: string | null
           created_at?: string
           event_type: string
           id?: string
           occurred_at?: string
           operator_id?: string | null
-          parent_lot_id: string
+          parent_lot_id?: string | null
           process_ref_id?: string | null
           qty_kg: number
         }
         Update: {
-          child_lot_id?: string
+          child_handling_unit_id?: string | null
+          child_lot_id?: string | null
           created_at?: string
           event_type?: string
           id?: string
           occurred_at?: string
           operator_id?: string | null
-          parent_lot_id?: string
+          parent_lot_id?: string | null
           process_ref_id?: string | null
           qty_kg?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "t_lot_lineage_child_handling_unit_id_fkey"
+            columns: ["child_handling_unit_id"]
+            isOneToOne: false
+            referencedRelation: "t_handling_units"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "t_lot_lineage_child_lot_id_fkey"
             columns: ["child_lot_id"]
