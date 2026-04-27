@@ -458,7 +458,24 @@ export default function ShockFreezingTerminalPage() {
 
   return (
     <div className="min-h-screen bg-background pb-[68px]">
-      <TerminalHeader kind="freezing" title="Mrożenie szokowe — CCP" icon={Snowflake} onBack={() => navigate(-1)} />
+      <TerminalHeader
+        kind="freezing"
+        title="Mrożenie szokowe — CCP"
+        icon={Snowflake}
+        onBack={() => navigate(-1)}
+        right={
+          <div className="flex items-center gap-2 rounded-md bg-white/10 px-3 py-1.5">
+            <Label htmlFor="demo-speed" className="text-xs uppercase tracking-wide cursor-pointer">
+              Demo speed {demoSpeed ? "5 min" : "50 min"}
+            </Label>
+            <Switch
+              id="demo-speed"
+              checked={demoSpeed}
+              onCheckedChange={setDemoSpeed}
+            />
+          </div>
+        }
+      />
       <div className="p-4">
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
