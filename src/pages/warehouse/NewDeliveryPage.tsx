@@ -268,8 +268,8 @@ export default function NewDeliveryPage() {
       );
       if (docError) throw docError;
 
-      // 2. Create movement document — trigger CCP1 ustawi ccp1_passed
-      // i wystawi auto-reklamację jeśli temp > 4°C
+      // 2. Create movement document — ccp1_passed jest kolumną GENERATED przez bazę
+      // (received_temp_c <= 4); trigger AFTER tworzy auto-reklamację gdy temp > 4°C.
       const movement = await createMovement.mutateAsync({
         company_id: step1Data.company_id,
         document_number: docNumber,
