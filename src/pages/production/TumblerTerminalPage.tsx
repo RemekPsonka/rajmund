@@ -371,12 +371,8 @@ export default function TumblerTerminalPage() {
   // Sprint 2: warunki zakończenia partii tumblera
   const hasInputs = (existingInputs?.length ?? 0) > 0;
   const hasPostWeight = existingLogs?.some(l => Number(l.weight_gross) > 0) ?? false;
-  const canFinish = hasInputs && hasPostWeight;
-  const finishDisabledReason = !hasInputs
-    ? "Brak wsadu — zeskanuj partię"
-    : !hasPostWeight
-      ? "Brak wagi po-procesowej — zaloguj wagę przed zamknięciem"
-      : null;
+  // recipeCheck zdefiniowany niżej; tu deklarujemy placeholder typowo:
+  // walidację zgodności z recepturą obliczamy w `recipeOk` pod useMemo recipeCheck.
 
   const handleConfirmFinish = () => {
     if (!selectedOrderId) return;
