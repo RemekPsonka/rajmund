@@ -40,6 +40,7 @@ import DevToolsPage from "./pages/dev/DevToolsPage";
 import SystemHealthPage from "./pages/dev/SystemHealthPage";
 import SettingsPage from "./pages/SettingsPage";
 import LotGenealogyPage from "./pages/genealogy/LotGenealogyPage";
+import SSCCGenealogyPage from "./pages/genealogy/SSCCGenealogyPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -85,6 +86,7 @@ const App = () => (
             <Route path="/settings/permissions" element={<PermissionsPage />} />
             <Route path="/settings/job-positions" element={<JobPositionsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/genealogia/sscc/:sscc" element={<SSCCGenealogyPage />} />
             <Route path="/genealogia/:lotId" element={<LotGenealogyPage />} />
           </Route>
           
