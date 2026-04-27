@@ -1,48 +1,43 @@
 ## Cel
-Atomowe zamykanie zlecenia produkcyjnego z utworzeniem partii wynikowej i zapisem genealogii w jednej transakcji PL/pgSQL.
+Strona `/genealogia/:lotId` z drzewem rodzic-dziecko + przycisk genealogii w `BatchesPage`.
 
-## 1. Migracja — RPC `close_production_order_with_lineage(p_order_id uuid)`
+## 1. Nowa strona `src/pages/genealogy/LotGenealogyPage.tsx`
 
-`SECURITY DEFINER`, `search_path = public`. Cała logika w PL/pgSQL = jedna transakcja (PostgreSQL automatycznie cofa wszystko przy `RAISE EXCEPTION`).
+- `lotId` z `useParams`.
+- `useLotLineage(lotId)` (z poprzedniego sprintu) + lokalne `useQuery(["batch-detail", lotId])` po `t_batches` (join z `t_products` po nazwę/SKU) na dane bieżącej partii.
+- Toast (sonner) na error.
+- Layout: Breadcrumb (Magazyn → Partie → Genealogia {kod}) + nagłówek z ikoną `GitBranch` + 3 sekcje w `Card`:
+  1. **Rodzice (skąd pochodzi)** — ikona `ArrowUp`. Lista `ancestors`. Pusto → "Brak rodziców (partia źródłowa, np. dostawa)".
+  2. **Ta partia** — `Card` z `border-2 border-primary/40`, grid 4 kolumny: numer partii (jako `<code>`), produkt + SKU, ilość current/initial, status + badge `source_event_type`.
+  3. **Dzieci (gdzie poszła)** — ikona `ArrowDown`. Lista `descendants`. Pusto → "Brak dzieci (partia jeszcze nie została użyta)".
+- Komponent `NodeRow`: indent `(depth-1)*24px` przez `marginLeft`, lewy `border-l-2 border-border` (efekt drzewa), `Package` ikonka, `lot_code` jako `<Link to={/genealogia/{lot_id}}>` (klikalne — nawigacja do innej genealogii), Badge `event_type` (mapowanie PL: DISASSEMBLY→Rozbiór, TUMBLING→Masowanie, ASSEMBLY→Składanie, FREEZING→Mrożenie, AGGREGATION→Agregacja, RECEIVING→Przyjęcie, SHIPPING→Wysyłka), `qty_kg` z 2 miejscami, data sformatowana `dd MMM yyyy HH:mm` przez `date-fns/locale/pl`.
+- `isLoading` → `Skeleton` (3 wiersze w sekcji).
 
-Kroki:
-1. Pobierz zlecenie; sprawdź `status = 'Open'` (inaczej `RAISE EXCEPTION`).
-2. Zmapuj `order.type` → `event_type`:
-   - `Decomposition` → `DISASSEMBLY`
-   - `Processing` → `TUMBLING`
-   - `Assembly` → `ASSEMBLY`
-   - `Freezing` → `FREEZING`
-   - `Packing` → `AGGREGATION`
-3. `SELECT SUM(weight_net), COUNT(*)` z `t_production_logs` dla zlecenia. Jeśli brak logów lub suma ≤ 0 → exception.
-4. `product_id` z pierwszego loga (po `created_at ASC`); `parent_batch_id` z `source_batch_id` tego loga, fallback do `batch_id` z pierwszego `t_production_inputs`.
-5. Numer partii przez istniejącą `generate_batch_number(product_id)`.
-6. Wybór `location_id` z `t_storage_locations` zakładu (preferuj `location_type='production'`); `expiration_date = CURRENT_DATE + COALESCE(default_expiration_days, 30)`.
-7. `INSERT INTO t_batches` z `parent_batch_id`, `source_event_type`, `status='Released'`, `initial_quantity = current_quantity = SUM`.
-8. `UPDATE t_production_logs SET output_batch_id = nowa` dla całego zlecenia.
-9. Pętla po unikalnych `batch_id` z `t_production_inputs` (GROUP BY): wstaw wpis do `t_lot_lineage` (`parent_lot_id`, `child_lot_id=nowa`, `event_type`, `qty_kg=SUM(weight)`, `process_ref_id=order_id`, `occurred_at=NOW()`). Pomiń wpisy z `qty_kg <= 0` i z `batch_id = nowa partia`.
-10. `UPDATE t_production_orders SET status='Closed', updated_at=NOW()`.
-11. Zwróć `jsonb` z `success`, `order_id`, `output_batch_id`, `output_batch_number`, `total_weight_kg`, `logs_updated`, `inputs_processed`, `lineage_entries_created`, `event_type`.
+## 2. Route w `src/App.tsx`
+- Import `LotGenealogyPage`.
+- Wewnątrz `<Route element={<DashboardLayout />}>` dodać:
+  `<Route path="/genealogia/:lotId" element={<LotGenealogyPage />} />`
 
-## 2. Aktualizacja hooka `useCloseProductionOrder`
+## 3. Przycisk w `src/pages/warehouse/BatchesPage.tsx`
+- Dodać `GitBranch` do importów z `lucide-react`.
+- Dodać `Link` z `react-router-dom` (jeśli brak).
+- W komórce akcji (linia ~322), PRZED `DropdownMenu`, dodać:
+  ```tsx
+  <Button variant="ghost" size="icon" className="h-8 w-8" asChild title="Genealogia">
+    <Link to={`/genealogia/${batch.id}`}>
+      <GitBranch className="h-4 w-4" />
+    </Link>
+  </Button>
+  ```
+  Owinąć obie akcje w `<div className="flex justify-end gap-1">`.
 
-W `src/hooks/useProductionOrders.ts` (linie ~404–433):
-- Zmień nazwę RPC na `close_production_order_with_lineage`.
-- Zaktualizuj typ zwrotki (`output_batch_number`, `total_weight_kg`, …).
-- Toast: "Zlecenie zamknięte. Partia wynikowa: {output_batch_number} ({total_weight_kg} kg)".
-- Invalidate dodatkowo `["lot-lineage"]` (klucz z poprzedniego sprintu).
-
-Reszta hooka, mutacja `useUpdateProductionOrder`, fetchery — bez zmian.
-
-## Atomowość
-PL/pgSQL automatycznie obejmuje całe ciało funkcji jedną transakcją. Każdy `RAISE EXCEPTION` lub błąd constraint cofa wszystkie wcześniejsze `INSERT/UPDATE` w funkcji. Brak potrzeby explicit `BEGIN/COMMIT`.
+## 4. Sidebar
+Bez zmian — zgodnie z założeniem.
 
 ## Acceptance criteria
-- Po zamknięciu zlecenia rozbioru: nowa partia w `t_batches` z `parent_batch_id` ustawionym na partię surowca i `source_event_type='DISASSEMBLY'`.
-- Wszystkie `t_production_logs` zlecenia mają `output_batch_id = id nowej partii`.
-- Wpisy w `t_lot_lineage` z `process_ref_id=order_id`, `event_type='DISASSEMBLY'`, `qty_kg` = waga inputu.
-- Błąd w środku funkcji → ŻADEN zapis nie pozostaje (transakcja rollback).
-- Frontend wywołuje tylko jedną RPC zamiast 4 mutacji.
-
-## Co NIE wchodzi w sprint
-- Stara funkcja `close_production_order_with_batches` zostaje (dla kompatybilności wstecznej) — może być usunięta w osobnym sprincie po weryfikacji.
-- Strona `/genealogia/:lotId` (kolejny sprint).
+- Klik ikony przy partii → `/genealogia/{id}`.
+- 3 sekcje z drzewem (indent + lewa pionowa linia).
+- Klikalne `lot_code` w węzłach → nawigacja do genealogii rodzica/dziecka.
+- Breadcrumb: Magazyn → Partie → Genealogia {kod}.
+- Pusta partia: "Brak rodziców (partia źródłowa, np. dostawa)".
+- TypeScript bez błędów, brak `any`.

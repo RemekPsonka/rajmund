@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo } from "react";
-import { Search, Layers, AlertCircle, CheckCircle, Clock, MoreHorizontal, Printer, Filter, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Layers, AlertCircle, CheckCircle, Clock, MoreHorizontal, Printer, Filter, ChevronLeft, ChevronRight, GitBranch } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useBatches, useUpdateBatchStatus, type BatchStatus, type Batch } from "@/hooks/useBatches";
 import { useCompanies } from "@/hooks/useCompanies";
 import { useStorageLocations } from "@/hooks/useStorageLocations";
@@ -320,6 +321,12 @@ export default function BatchesPage() {
                         </Badge>
                       </TableCell>
                         <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" asChild title="Genealogia">
+                              <Link to={`/genealogia/${batch.id}`}>
+                                <GitBranch className="h-4 w-4" />
+                              </Link>
+                            </Button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -356,6 +363,7 @@ export default function BatchesPage() {
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
