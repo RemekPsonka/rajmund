@@ -85,6 +85,7 @@ export default function PalletizationPage() {
   const updateStatus = useUpdateHandlingUnitStatus();
   const markLabelPrinted = useMarkLabelPrinted();
   const assignLog = useAssignLogToHandlingUnit();
+  const logPrint = useLogPrint();
 
   // Filter facilities by company
   const filteredFacilities = facilities?.filter(f => f.company_id === selectedCompanyId) || [];
@@ -92,6 +93,15 @@ export default function PalletizationPage() {
   // Open and closed pallets
   const openPallets = pallets?.filter(p => p.status === "Open") || [];
   const closedPallets = pallets?.filter(p => p.status === "Closed") || [];
+
+  // Last print map for "Ostatni wydruk" column
+  const allPalletIds = (pallets ?? []).map(p => p.id);
+  const { data: lastPrintMap } = useLastPrintForReferences(allPalletIds);
+  const formatLastPrint = (palletId: string) => {
+    const ts = lastPrintMap?.[palletId];
+    if (!ts) return "Nie drukowano";
+    try { return format(new Date(ts), "yyyy-MM-dd HH:mm"); } catch { return "—"; }
+  };
 
   // Create new pallet
   const handleCreatePallet = async () => {
