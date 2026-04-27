@@ -35,6 +35,7 @@ export interface Product {
   default_expiration_days: number | null;
   min_storage_temp: number | null;
   max_storage_temp: number | null;
+  unit_target_weight_kg: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -49,16 +50,21 @@ export interface ProductFormData {
   default_expiration_days?: number;
   min_storage_temp?: number;
   max_storage_temp?: number;
+  unit_target_weight_kg?: number;
 }
 
-export function useProducts(companyId?: string) {
+export function useProducts(companyId?: string, industryCategory?: IndustryCategory) {
   return useQuery({
-    queryKey: ["products", companyId],
+    queryKey: ["products", companyId, industryCategory],
     queryFn: async () => {
       let query = supabase.from("t_products").select("*").order("name");
 
       if (companyId) {
         query = query.eq("company_id", companyId);
+      }
+
+      if (industryCategory) {
+        query = query.eq("industry_category", industryCategory);
       }
 
       const { data, error } = await query;

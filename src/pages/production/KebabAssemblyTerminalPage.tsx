@@ -1,8 +1,15 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, User, Scan, Plus, Scale, Trash2, Package, CheckCircle } from "lucide-react";
+import { ArrowLeft, User, Scan, Plus, Scale, Trash2, Package, CheckCircle, AlertCircle, ChefHat } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -25,9 +32,7 @@ import {
   ProcessingOutputBatch
 } from "@/hooks/useProductionOrders";
 import { useEmployees } from "@/hooks/useEmployees";
-import { useProducts } from "@/hooks/useProducts";
-import { useFacilities } from "@/hooks/useFacilities";
-import { useCompanies } from "@/hooks/useCompanies";
+import { useProducts, type Product } from "@/hooks/useProducts";
 import { KEBAB_WEIGHT_VARIANTS, useCreateKebabVariants } from "@/hooks/useKebabVariants";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +47,9 @@ const TARE_DEFAULT = 2.4;
 
 export default function KebabAssemblyTerminalPage() {
   const navigate = useNavigate();
+
+  // Sprint: produkt docelowy (kebab) — wybierany PRZED resztą flow
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   // Selected batch from Processing output
   const [selectedBatch, setSelectedBatch] = useState<ProcessingOutputBatch | null>(null);
@@ -62,21 +70,21 @@ export default function KebabAssemblyTerminalPage() {
   // Data - get output batches from closed Processing orders
   const { data: processingOutputs, isLoading: isLoadingBatches } = useProcessingOutputBatches();
   const { data: employees } = useEmployees();
-  const { data: products } = useProducts();
-  const { data: facilities } = useFacilities();
-  const { data: companies } = useCompanies();
-  
+  // Sprint: produkty docelowe (kebaby) — operator wybiera SKU PRZED ważeniem
+  const { data: kebabProducts, isLoading: isLoadingProducts } = useProducts(undefined, "FinishedGood");
+
   // Mutations
   const createOrder = useCreateProductionOrder();
   const createInput = useCreateProductionInput();
   const createLog = useCreateProductionLog();
   const createVariants = useCreateKebabVariants();
 
-  // Get finished goods products (kebab variants)
-  const finishedProducts = useMemo(() => 
-    products?.filter(p => p.industry_category === "FinishedGood") || [],
-    [products]
-  );
+  // Sprint: po wyborze produktu — preset wariantu wagi szpady (jeśli zdefiniowano)
+  useEffect(() => {
+    if (selectedProduct?.unit_target_weight_kg) {
+      setSelectedVariant(Number(selectedProduct.unit_target_weight_kg));
+    }
+  }, [selectedProduct]);
 
   // Calculate totals
   const totalAssembled = assembledKebabs.reduce((sum, k) => sum + k.actualWeight, 0);
@@ -191,17 +199,16 @@ export default function KebabAssemblyTerminalPage() {
         direction: "Assembly",
       });
 
-      // 2. Create production log for the output - safely get product_id
-      const outputProductId = finishedProducts[0]?.id || selectedBatch.output_batch.product.id;
-      if (!outputProductId) {
-        toast.error("Brak produktu docelowego - dodaj produkt typu 'Finished Good'");
+      // 2. Create production log for the output — używamy produktu wybranego przez operatora
+      if (!selectedProduct) {
+        toast.error("Nie wybrano produktu docelowego");
         return;
       }
 
       const logResult = await createLog.mutateAsync({
         production_order_id: createdOrderId,
         employee_id: verifiedEmployee.id,
-        product_id: outputProductId,
+        product_id: selectedProduct.id,
         source_batch_id: selectedBatch.output_batch.id,
         weight_gross: totalAssembled + parseFloat(tareWeight) * totalCount,
         weight_tare: parseFloat(tareWeight) * totalCount,
@@ -232,7 +239,92 @@ export default function KebabAssemblyTerminalPage() {
   };
 
   // Check if ready to assemble
-  const canAssemble = selectedBatch && createdOrderId && verifiedEmployee;
+  const canAssemble = !!(selectedProduct && selectedBatch && createdOrderId && verifiedEmployee);
+
+  // Gate 1: brak zdefiniowanych produktów-wyrobów (kebabów) — pełnoekranowy blocker
+  if (!isLoadingProducts && (!kebabProducts || kebabProducts.length === 0)) {
+    return (
+      <div className="min-h-screen bg-background p-4 flex items-center justify-center">
+        <Card className="max-w-md w-full border-destructive">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-destructive" />
+              Brak produktów typu Kebab
+            </CardTitle>
+            <CardDescription>
+              Nie zdefiniowano żadnego produktu z kategorią „Wyrób gotowy" (kebab).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Dodaj produkt w Ustawienia → Produkty z kategorią „Wyrób gotowy", aby rozpocząć składanie.
+            </p>
+            <Button onClick={() => navigate("/products")} className="w-full">
+              Przejdź do Produktów
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Gate 2: produkt docelowy nie wybrany — selektor jako pierwszy ekran
+  if (!selectedProduct) {
+    return (
+      <div className="min-h-screen bg-background p-4">
+        <div className="flex items-center gap-4 mb-6">
+          <Button variant="outline" size="icon" onClick={() => navigate(-1)}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold">Terminal Składania Kebaba</h1>
+            <p className="text-muted-foreground">Wybierz produkt do składania</p>
+          </div>
+        </div>
+
+        <Card className="max-w-2xl mx-auto">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ChefHat className="h-5 w-5 text-primary" />
+              Produkt docelowy
+            </CardTitle>
+            <CardDescription>
+              Wybierz wariant kebabu, który będzie produkowany w tej sesji. Wybór wpływa na numerację partii (LOT) oraz domyślną wagę szpady.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Select
+              onValueChange={(id) => {
+                const p = kebabProducts?.find((x) => x.id === id) ?? null;
+                setSelectedProduct(p);
+              }}
+            >
+              <SelectTrigger className="h-14 text-lg">
+                <SelectValue placeholder="-- wybierz produkt kebabowy --" />
+              </SelectTrigger>
+              <SelectContent>
+                {kebabProducts?.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{p.name}</span>
+                      {p.sku && (
+                        <span className="text-xs text-muted-foreground font-mono">({p.sku})</span>
+                      )}
+                      {p.unit_target_weight_kg && (
+                        <Badge variant="secondary" className="ml-1">
+                          {Number(p.unit_target_weight_kg)} kg/szpada
+                        </Badge>
+                      )}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   // Render batch selection if no batch selected
   if (!selectedBatch) {
@@ -314,10 +406,27 @@ export default function KebabAssemblyTerminalPage() {
         <Button variant="outline" size="icon" onClick={() => navigate(-1)}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <div>
-          <h1 className="text-2xl font-bold">Terminal Składania Kebaba</h1>
-          <p className="text-muted-foreground">Produkcja słupków z masowanego mięsa</p>
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold">Składanie kebabu — {selectedProduct.name}</h1>
+          <p className="text-muted-foreground">
+            Produkt: <span className="font-mono">{selectedProduct.sku ?? "—"}</span>
+            {selectedProduct.unit_target_weight_kg && (
+              <> · domyślna szpada: {Number(selectedProduct.unit_target_weight_kg)} kg</>
+            )}
+          </p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setSelectedProduct(null);
+            setSelectedBatch(null);
+            setCreatedOrderId(null);
+            setAssembledKebabs([]);
+          }}
+        >
+          Zmień produkt
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
