@@ -890,6 +890,39 @@ export default function NewDeliveryPage() {
           </div>
         </>
       )}
+
+      {/* CCP1 — modal warning przy temp > +4°C */}
+      <AlertDialog open={showCcp1Warning} onOpenChange={setShowCcp1Warning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Naruszenie CCP1 — temperatura przekroczona
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span className="block">
+                Zmierzona temperatura przyjęcia{" "}
+                <strong className="text-destructive">
+                  {step1Data?.received_temp_c}°C
+                </strong>{" "}
+                przekracza dopuszczalny próg <strong>+4°C</strong>.
+              </span>
+              <span className="block">
+                Możesz odrzucić dostawę lub przyjąć ją z automatycznym
+                wystawieniem dokumentu reklamacyjnego.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel onClick={handleRejectDelivery} className="bg-destructive text-destructive-foreground hover:bg-destructive/90 border-destructive">
+              Odrzuć dostawę
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleAcceptWithComplaint} className="bg-warning text-warning-foreground hover:bg-warning/90">
+              Przyjmij z reklamacją (auto-dokument)
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
