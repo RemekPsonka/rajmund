@@ -549,39 +549,21 @@ export default function PalletizationPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Label Preview Dialog */}
-      <Dialog open={showLabelDialog} onOpenChange={setShowLabelDialog}>
-        <DialogContent className="max-w-fit">
-          <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
-              <span>Podgląd etykiety</span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => window.print()}
-              >
-                <Printer className="h-4 w-4 mr-2" />
-                Drukuj
-              </Button>
-            </DialogTitle>
-          </DialogHeader>
-          
-          {selectedPallet && (
-            <div className="flex justify-center p-4 bg-gray-100 rounded-lg">
-              <PalletLabel
-                ref={labelRef}
-                companyName={selectedCompany?.name || ""}
-                ssccNumber={selectedPallet.sscc_number}
-                productSummary={productSummary}
-                totalNetWeight={selectedPallet.total_net_weight}
-                totalGrossWeight={selectedPallet.total_gross_weight}
-                productionDate={selectedPallet.production_date}
-                facilityName={selectedFacility?.name}
-              />
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Label Preview Dialog — etykieta SSCC z QR + audyt do t_print_log */}
+      {selectedPallet && (
+        <SSCCLabelPreview
+          open={showLabelDialog}
+          onClose={() => setShowLabelDialog(false)}
+          onPrint={handleConfirmPrint}
+          isPrinting={logPrint.isPending}
+          sscc={selectedPallet.sscc_number}
+          productName={productSummary[0]?.name}
+          weightKg={selectedPallet.total_net_weight}
+          lotCode={selectedPallet.sscc_number.slice(-6)}
+          productionDate={selectedPallet.production_date}
+          bestBefore={null}
+        />
+      )}
     </div>
   );
 }
