@@ -1,86 +1,114 @@
-# Plan: Manual smoke test Sprintu 2 (pełna automatyzacja)
+## Sprint 3 — Migracja: krzywa temperatur + CCP1 na PZ
 
-## Co robimy
+Czysta migracja schematu. Bez zmian w UI/kodzie aplikacji w tym kroku.
 
-Wykonuję smoke test 6 punktów S2 end-to-end w preview Lovable. Każdy krok robię w browser, każdą asercję weryfikuję zapytaniem do bazy. Na koniec — raport pass/fail per punkt + decyzja S3 go/no-go.
+### Plik
 
-## Kolejność
+`supabase/migrations/<timestamp>_s3_freezing_curve_and_ccp1.sql`
 
-### 0. Seed (migracja, ~10 sek)
-- Wywołam `SELECT public.simulate_full_production_day();` jako migrację
-- Zwróci ID firmy KTF, partii surowca/mięsa/masy/kebabu, zlecenia
-- Zapamiętam zwrócone IDs do późniejszej weryfikacji
+### Zawartość migracji
 
-UWAGA: seed tworzy zlecenia jako **Closed**. Do testu pkt 1, 2-3, 4 muszę dodatkowo wstawić **3 świeże otwarte zlecenia** (Processing + Assembly + Freezing) używając tych samych produktów i partii — w tej samej migracji, jako INSERT po SELECT seed.
+**1. Nowa tabela `t_freezing_temp_log`** — historia pomiarów temperatury rdzenia podczas mrożenia (źródło danych dla wykresu krzywej).
 
-### 1. Tumbler — ZAKOŃCZ PARTIĘ → LOT (~5 akcji)
-- `navigate_to_sandbox /production/tumbler`
-- Wybierz otwarte zlecenie Processing
-- Wpisz kod partii mięsa w pole skanowania, Enter
-- Step processing → start, step output → wpisz wagę 2850 (95% z 3000)
-- Klik ZAKOŃCZ PARTIĘ → potwierdź
-- **Weryfikacja w bazie:** nowa partia z `source_event_type='TUMBLING'`, wpis w `t_lot_lineage` z `event_type='TUMBLING'`, zlecenie `Closed`
+```sql
+CREATE TABLE public.t_freezing_temp_log (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  production_log_id uuid NOT NULL
+    REFERENCES public.t_production_logs(id) ON DELETE CASCADE,
+  recorded_at timestamptz NOT NULL DEFAULT now(),
+  core_temp_c numeric NOT NULL,
+  ambient_temp_c numeric,
+  source text NOT NULL DEFAULT 'manual'
+    CHECK (source IN ('manual','auto')),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
 
-### 2. KebabAssembly — gate selektora produktu (~4 akcje)
-- `/production/assembly`
-- Sprawdź czy widać selektor produktu jako pierwszy ekran
-- Wybierz produkt → asercja: pojawia się badge + przycisk „Zmień produkt"
-- Klik „Zmień produkt" → asercja: powrót do gate
-- **Pomijam Asercję B** (zmiana industry_category dla wszystkich produktów + restore) — wymaga 2 dodatkowych migracji i ryzyko śmieci. Zweryfikuję statycznie: grep w `KebabAssemblyTerminalPage.tsx` pokaże logikę gate'a.
+CREATE INDEX idx_freezing_temp_production_log
+  ON public.t_freezing_temp_log(production_log_id, recorded_at DESC);
+```
 
-### 3. KebabAssembly — preset wagi z unit_target_weight_kg (~4 akcje)
-- Migracja: `UPDATE t_products SET unit_target_weight_kg=5 WHERE name='Kebab Drobiowy 15kg'` + nowy produkt FinishedGood z `unit_target_weight_kg=10`
-- W terminalu: wybierz produkt 1 → screenshot pola variant
-- „Zmień produkt" → wybierz produkt 2 → screenshot pola variant
-- Asercja: preset 5 → 10
+**2. RLS dla `t_freezing_temp_log`** — w stylu pozostałych tabel produkcyjnych (auth users + global_admin + operator/facility_admin via dostęp do company przez join na production_log → production_order):
 
-### 4. Mrożenie CCP (kluczowy punkt, ~10 akcji) — DWIE ŚCIEŻKI
-**Ścieżka A (passed, -20°C):**
-- `/production/freezing` → wybierz facility/komorę
-- Wpisz kod partii kebabu w skaner
-- Asercja UI: partia na liście aktywnych
-- F5 (`navigate_to_sandbox` ponownie) → asercja: partia nadal jest (persystencja)
-- Wpisz -20 w temp → zapisz → Zakończ
-- **Weryfikacja w bazie:** `t_production_logs.ccp_passed=true`, `freezing_completed_at` not null, nowa partia `source_event_type='FREEZING'`, lineage z `event_type='FREEZING'`
+```sql
+ALTER TABLE public.t_freezing_temp_log ENABLE ROW LEVEL SECURITY;
 
-**Ścieżka B (failed, -10°C):**
-- Wymaga drugiego otwartego zlecenia Freezing + drugiej partii (oba dorzucę w seed migration)
-- Skanuj → wpisz -10 → Zakończ
-- **Weryfikacja:** `ccp_passed=false`, zlecenie nadal `Open`, `notes` zawiera `[QC ...] ... CCP -18°C`, brak nowej partii
+-- SELECT: każdy zalogowany (parytet z t_production_logs „Access for auth users")
+CREATE POLICY "Access for auth users" ON public.t_freezing_temp_log
+  FOR ALL USING (is_authenticated()) WITH CHECK (is_authenticated());
 
-### 5. StateMachineBadge w 4 terminalach (~4 akcje + screenshoty)
-- Po kolei: `/production/terminal`, `/production/tumbler`, `/production/assembly`, `/production/freezing`
-- Screenshot każdego — sprawdzę obecność badge'a + (Tumbler/Freezing) timera mm:ss
-- Test timera: w Tumblerze sprawdzę aktywny pill — jeśli zawiera tabular-nums z dwukropkiem, pass
+CREATE POLICY "Global admins can do everything with freezing temp log"
+  ON public.t_freezing_temp_log FOR ALL
+  USING (is_global_admin(auth.uid()));
 
-### 6. Unsaved changes warning (~3 akcje)
-- W Tumblerze: zacznij flow (zlecenie + skan partii) → isDirty=true
-- Klik „Magazyn" w sidebarze
-- Browser pokazuje natywny `confirm()` → mogę zaobserwować dialog przez `observe`
-- Akceptuj/odrzuć i sprawdź zachowanie
+CREATE POLICY "Users can view freezing temp log"
+  ON public.t_freezing_temp_log FOR SELECT
+  USING (EXISTS (
+    SELECT 1 FROM public.t_production_logs pl
+    JOIN public.t_production_orders po ON po.id = pl.production_order_id
+    WHERE pl.id = t_freezing_temp_log.production_log_id
+      AND has_company_access(auth.uid(), po.company_id)
+  ));
 
-UWAGA techniczna: `window.confirm()` jest natywny, browser tools czasem auto-akceptują. Jeśli się nie uda — zaraportuję jako „browser-blocked, weryfikacja kodem" (już potwierdzone w sprint2-smoke.test.ts).
+CREATE POLICY "Operators can insert freezing temp log"
+  ON public.t_freezing_temp_log FOR INSERT
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM public.t_production_logs pl
+    JOIN public.t_production_orders po ON po.id = pl.production_order_id
+    WHERE pl.id = t_freezing_temp_log.production_log_id
+      AND has_facility_access(auth.uid(), po.facility_id)
+      AND (has_role(auth.uid(),'facility_admin'::app_role)
+        OR has_role(auth.uid(),'operator'::app_role))
+  ));
+```
 
-### 7. Cleanup
-- Migracja: `DELETE` świeżych otwartych zleceń + ich logów (zostawiam seed KTF jako fixture pod S3)
-- `unit_target_weight_kg` zostawiam (wg punktu 7 user message)
+**3. Realtime** — publikacja dla wykresu w S3.2/S3.3:
 
-## Output dla użytkownika
+```sql
+ALTER PUBLICATION supabase_realtime ADD TABLE public.t_freezing_temp_log;
+ALTER TABLE public.t_freezing_temp_log REPLICA IDENTITY FULL;
+```
 
-Tabela 6 punktów × {status, dowody (screenshot/query), uwagi}, zakończona decyzją:
-- 6/6 ✅ → **S3 startuje**
-- pkt 4 ❌ → **STOP**, fix S2.5
-- pkt 1-3 ❌ → idź dalej, P2 backlog
-- pkt 5-6 ❌ → kosmetyka, S3 ok
+**4. CCP1 na PZ — dodatkowe kolumny w `t_warehouse_movements`**:
 
-## Ryzyka
+```sql
+ALTER TABLE public.t_warehouse_movements
+  ADD COLUMN IF NOT EXISTS received_temp_c numeric;
 
-- **Skanowanie partii:** wpisuję kod ręcznie w input + Enter; jeśli komponent ma niestandardowy handler, próbuję 2× i raportuję blocker
-- **Natywny confirm w pkt 6:** jak wyżej, mam fallback statyczny
-- **Czas:** ~25-35 wywołań browser--act + ~10 read_query + 2-3 migracje. Realnie 8-12 minut wykonania.
+ALTER TABLE public.t_warehouse_movements
+  ADD COLUMN IF NOT EXISTS received_temp_method text
+    CHECK (received_temp_method IS NULL
+      OR received_temp_method IN ('VEHICLE_GAUGE','MANUAL_PROBE','BOTH'));
 
-## Co NIE robię
+ALTER TABLE public.t_warehouse_movements
+  ADD COLUMN IF NOT EXISTS ccp1_passed boolean
+    GENERATED ALWAYS AS
+      (received_temp_c IS NULL OR received_temp_c <= 4) STORED;
+```
 
-- Asercja B w pkt 2 (zmiana industry_category dla wszystkich produktów) — za duże ryzyko śmieci, weryfikuję statycznie
-- Tworzenie zleceń z UI — robię to przez seed migration (szybciej, deterministycznie)
-- Reset bazy po teście — usuwam tylko świeże zlecenia testowe, fixture KTF zostaje
+**5. Konfiguracja kontrolna freezingu w `t_production_logs`** (target/limit per LOT, S3 użyje do hard-gate'u):
+
+```sql
+ALTER TABLE public.t_production_logs
+  ADD COLUMN IF NOT EXISTS target_core_temp_c numeric DEFAULT -18;
+
+ALTER TABLE public.t_production_logs
+  ADD COLUMN IF NOT EXISTS max_freezing_minutes int DEFAULT 240;
+```
+
+### Acceptance test (po migracji uruchamiam jako sanity check)
+
+1. `INSERT` 5 wierszy `t_freezing_temp_log` dla istniejącego `production_log_id` z różnymi `recorded_at` → `SELECT ... ORDER BY recorded_at` zwraca chronologicznie.
+2. `INSERT INTO t_warehouse_movements (..., received_temp_c=5)` → `ccp1_passed = false`.
+3. `INSERT INTO t_warehouse_movements (..., received_temp_c=3)` → `ccp1_passed = true`.
+4. `SELECT * FROM pg_publication_tables WHERE pubname='supabase_realtime' AND tablename='t_freezing_temp_log'` → zwraca wiersz.
+
+### Co NIE wchodzi w ten sprint (świadomie)
+
+- UI rejestracji pomiarów / wykres krzywej (S3.2/S3.3).
+- Hard gate na PZ w UI (S3 dalej).
+- Zmiany w `close_production_order_with_lineage` (CCP gate już jest w S2.5 na bazie `latest_core_temp_c`/`ccp_passed`; w S3 dorzucimy walidację względem `target_core_temp_c` jak będzie potrzebne).
+
+### Potencjalne ryzyka
+
+- `ALTER PUBLICATION supabase_realtime ADD TABLE` jest idempotentne tylko warunkowo — jeśli tabela już byłaby w publikacji, polecenie rzuca błąd. Tabela jest nowa, więc OK; nie owijamy w `DO $$`.
+- `GENERATED ALWAYS ... STORED` na `ccp1_passed`: wszystkie istniejące wiersze `t_warehouse_movements` dostaną `received_temp_c=NULL` → `ccp1_passed=true`. To poprawne (brak danych ≠ fail).
