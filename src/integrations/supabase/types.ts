@@ -2031,6 +2031,7 @@ export type Database = {
       }
     }
     Functions: {
+      audit_e2e_flow: { Args: { p_received_temp_c?: number }; Returns: Json }
       calculate_production_yield: {
         Args: { p_order_id: string }
         Returns: {
@@ -2045,6 +2046,7 @@ export type Database = {
         Returns: boolean
       }
       check_trigger_exists: { Args: { trigger_name: string }; Returns: boolean }
+      cleanup_audit_data: { Args: never; Returns: undefined }
       cleanup_demo_data: { Args: never; Returns: Json }
       close_production_order_with_batches: {
         Args: { p_order_id: string }
