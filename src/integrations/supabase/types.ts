@@ -1106,6 +1106,13 @@ export type Database = {
             referencedRelation: "t_recipes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "t_production_orders_supervisor_id_fkey"
+            columns: ["supervisor_id"]
+            isOneToOne: false
+            referencedRelation: "t_employees"
+            referencedColumns: ["id"]
+          },
         ]
       }
       t_production_tasks: {
@@ -2031,7 +2038,7 @@ export type Database = {
       }
     }
     Functions: {
-      audit_e2e_flow: { Args: { p_received_temp_c?: number }; Returns: Json }
+      audit_e2e_flow: { Args: { p_temp?: number }; Returns: Json }
       calculate_production_yield: {
         Args: { p_order_id: string }
         Returns: {
@@ -2104,6 +2111,7 @@ export type Database = {
       }
       seed_minimal_demo: { Args: never; Returns: Json }
       simulate_full_production_day: { Args: never; Returns: Json }
+      test_ccp3_gate: { Args: never; Returns: Json }
     }
     Enums: {
       app_role: "global_admin" | "facility_admin" | "operator" | "viewer"
