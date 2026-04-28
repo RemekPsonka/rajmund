@@ -35,6 +35,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
 import { DemoReadinessChecklist } from "@/components/dev/DemoReadinessChecklist";
+import { DatabaseHealthCheck } from "@/components/dev/DatabaseHealthCheck";
 
 interface SimulationResult {
   success: boolean;
@@ -148,6 +149,9 @@ export default function DevToolsPage() {
           ⚠️ TYLKO ŚRODOWISKO TESTOWE
         </Badge>
       </div>
+
+      {/* Database health — auto-weryfikacja schematu (triggery/FK/GENERATED/CHECK) */}
+      <DatabaseHealthCheck />
 
       {/* Demo readiness — auto-weryfikacja 9 warunków */}
       <DemoReadinessChecklist />
