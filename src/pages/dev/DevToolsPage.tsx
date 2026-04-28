@@ -42,6 +42,12 @@ interface SimulationResult {
   message: string;
   summary: {
     raw_input_kg: number;
+    receiving?: {
+      document_number: string;
+      supplier_name: string;
+      temp_c: number;
+      ccp1_passed: boolean;
+    };
     decomposition: {
       meat_kg: number;
       bones_kg: number;
