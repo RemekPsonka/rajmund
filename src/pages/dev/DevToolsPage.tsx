@@ -348,7 +348,7 @@ export default function DevToolsPage() {
       </Card>
 
       {/* Results */}
-      {result && result.success && (
+      {result && result.success && result.summary && (
         <Card className="border-green-500/50 bg-green-50 dark:bg-green-950/20">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-green-700 dark:text-green-400">
