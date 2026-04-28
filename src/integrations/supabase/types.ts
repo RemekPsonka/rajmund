@@ -2048,6 +2048,7 @@ export type Database = {
           yield_percentage: number
         }[]
       }
+      check_database_integrity: { Args: never; Returns: Json }
       check_permission: {
         Args: { _action: string; _resource: string; _user_id: string }
         Returns: boolean
