@@ -42,6 +42,12 @@ interface SimulationResult {
   message: string;
   summary: {
     raw_input_kg: number;
+    receiving?: {
+      document_number: string;
+      supplier_name: string;
+      temp_c: number;
+      ccp1_passed: boolean;
+    };
     decomposition: {
       meat_kg: number;
       bones_kg: number;
@@ -357,6 +363,36 @@ export default function DevToolsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
+            {/* PZ — Przyjęcie towaru (CCP1) */}
+            {result.summary.receiving && (
+              <div className="bg-background rounded-lg p-4 border-l-4 border-blue-500">
+                <h4 className="font-semibold mb-3 flex items-center gap-2">
+                  <Package className="h-4 w-4 text-blue-500" />
+                  1. PZ — Przyjęcie towaru
+                </h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Numer dokumentu</p>
+                    <p className="font-mono font-medium">{result.summary.receiving.document_number}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Dostawca</p>
+                    <p className="font-medium">{result.summary.receiving.supplier_name}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Temperatura odbioru</p>
+                    <p className="font-medium">{result.summary.receiving.temp_c}°C</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">CCP1 (≤4°C)</p>
+                    <Badge variant={result.summary.receiving.ccp1_passed ? "default" : "destructive"}>
+                      {result.summary.receiving.ccp1_passed ? "✓ OK" : "✗ FAIL"}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Summary Grid - Phase Yields */}
             <div>
               <h4 className="font-semibold mb-3">📊 Podsumowanie przepływu produkcji</h4>
