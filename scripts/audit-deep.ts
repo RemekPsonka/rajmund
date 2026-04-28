@@ -27,8 +27,8 @@ T("get_lot_lineage returns rows for kebab batch", async () => {
   if (!kebabId) return "no kebab_batch_id";
   const { data: tree, error } = await sb.rpc("get_lot_lineage", { lot_id: kebabId });
   if (error) return error.message;
-  const n = Array.isArray(tree) ? tree.length : 0;
-  return n > 0 ? true : `empty tree (${n})`;
+  const t = tree as any; const n = (t?.ancestors?.length ?? 0) + (t?.descendants?.length ?? 0);
+  return n > 0 ? true : `empty tree (${n}) raw=${JSON.stringify(tree)}`;
 });
 
 // 4) CCP1 trigger fires once per >+4°C reception
