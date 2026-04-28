@@ -1106,6 +1106,13 @@ export type Database = {
             referencedRelation: "t_recipes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "t_production_orders_supervisor_id_fkey"
+            columns: ["supervisor_id"]
+            isOneToOne: false
+            referencedRelation: "t_employees"
+            referencedColumns: ["id"]
+          },
         ]
       }
       t_production_tasks: {
