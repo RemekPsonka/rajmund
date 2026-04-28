@@ -38,6 +38,7 @@ import PermissionsPage from "./pages/settings/PermissionsPage";
 import JobPositionsPage from "./pages/settings/JobPositionsPage";
 import DevToolsPage from "./pages/dev/DevToolsPage";
 import SystemHealthPage from "./pages/dev/SystemHealthPage";
+import { DevHealthCheck } from "@/components/dev/DevHealthCheck";
 import SettingsPage from "./pages/SettingsPage";
 import LotGenealogyPage from "./pages/genealogy/LotGenealogyPage";
 import SSCCGenealogyPage from "./pages/genealogy/SSCCGenealogyPage";
@@ -48,6 +49,7 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
+      <DevHealthCheck />
       <Toaster />
       <Sonner />
       <BrowserRouter>

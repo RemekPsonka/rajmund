@@ -1,126 +1,104 @@
 ## Cel
 
-Stworzyć funkcję RPC `check_database_integrity()` weryfikującą zdrowie schematu bazy (triggery, FK, GENERATED columns, CHECK constraints) i wyświetlić wynik w `/dev-tools` jako sekcja **"Database health check"** z auto-uruchomieniem przy wejściu na stronę.
+Wzmocnić istniejący `check_database_integrity()` o 4 rozszerzenia chroniące przed regresjami wykrytymi w Audit Loop #2: duplikaty triggerów, severity per check, self-validation w `audit_e2e_flow`, oraz auto-check w trybie dev przy starcie aplikacji.
 
-## Co sprawdzamy (lista oczekiwań)
+## Stan obecny (zweryfikowany)
 
-### 1. Triggery (krytyczne dla integralności biznesowej)
-Sprawdzamy obecność w `pg_trigger.tgname`:
-- `trg_create_receiving_lineage` (t_batches) — auto lineage RECEIVING
-- `trg_create_aggregation_lineage` (t_production_logs) — paleta ↔ batch
-- `trg_create_ccp1_complaint` (t_warehouse_movements) — auto-reklamacja >+4°C
-- `trg_ccp1_set_flag` (t_warehouse_movements)
-- `trg_enforce_ccp3` (t_handling_units) — hard-gate mrożenia
-- `trg_reduce_batch_on_input` (t_production_inputs) — pomniejszanie stanów
-- `trg_update_handling_unit_totals` (t_production_logs)
-- `trg_update_shipment_totals` (t_shipment_items)
-- `trg_populate_shipment_item_batch` (t_shipment_items)
-- `trg_mark_handling_unit_shipped` (t_shipment_items)
-- `trg_validate_recipe_ingredient_role` (t_recipe_ingredients)
+- `check_database_integrity()` istnieje (v1) — sprawdza 25 oczekiwań w 4 kategoriach (trigger/fk/generated/check), bez severity i bez detekcji duplikatów.
+- `src/components/dev/DatabaseHealthCheck.tsx` + wpięcie w `/dev-tools` działa.
+- `audit_e2e_flow(p_temp)` istnieje, ale nie wywołuje health check.
+- `App.tsx` nie ma auto-check w dev mode.
 
-Dla każdego: `EXISTS w pg_trigger` + opcjonalnie `tgrelid` zgadza się z oczekiwaną tabelą.
+## Co dokładnie zostanie zrobione
 
-### 2. Klucze obce (kluczowe relacje)
-Sprawdzamy `pg_constraint contype='f'`:
-- `t_production_orders.supervisor_id → t_employees.id` (naprawione w pętli #2; nie do `auth.users`)
-- `t_lot_lineage.parent_lot_id → t_batches.id`
-- `t_lot_lineage.child_lot_id → t_batches.id`
-- `t_lot_lineage.child_handling_unit_id → t_handling_units.id`
-- `t_production_logs.handling_unit_id → t_handling_units.id`
-- `t_production_logs.source_batch_id → t_batches.id`
-- `t_production_logs.output_batch_id → t_batches.id`
-- `t_supplier_complaints.movement_id → t_warehouse_movements.id`
-- `t_shipment_items.shipment_id → t_shipments.id`
-- `t_shipment_items.handling_unit_id → t_handling_units.id`
+### 1. Migracja SQL — rozszerzenie `check_database_integrity()`
 
-### 3. GENERATED columns
-`information_schema.columns.is_generated='ALWAYS'`:
-- `t_warehouse_movements.ccp1_passed` (GENERATED — `received_temp_c <= 4`)
-- `t_production_logs.weight_net` (jeśli jest GENERATED) — wykrywane dynamicznie
+Dodać do każdego elementu wynikowej tablicy `checks` pole `severity` (CRITICAL | HIGH | MEDIUM | LOW) wg mapowania:
 
-### 4. CHECK constraints
-`pg_constraint contype='c'`:
-- `t_production_logs_process_stage_check` (zawiera `Stacking`, `ShockFreezing`, `Freezing`)
-- `t_handling_units` status check
-- `t_batches_status_check`
+- **CRITICAL**: triggery CCP (`trg_ccp1_set_flag`, `trg_create_ccp1_complaint`, `trg_enforce_ccp3`), FK `t_production_orders.supervisor_id → t_employees`, kategoria `duplicates`.
+- **HIGH**: triggery lineage (`trg_create_receiving_lineage`, `trg_create_aggregation_lineage`), totals (`trg_update_handling_unit_totals`, `trg_update_shipment_totals`), `trg_reduce_batch_on_input`, `trg_populate_shipment_item_batch`, `trg_mark_handling_unit_shipped`, FK lineage/lot/handling_unit.
+- **MEDIUM**: GENERATED columns, CHECK constraints, `trg_validate_recipe_ingredient_role`.
+- **LOW**: zarezerwowane (na razie nieużywane, ale pole obecne dla forward-compat).
 
-## Schemat odpowiedzi RPC
+Dodać **5. kategorię `duplicates`**:
 
-```jsonc
-{
-  "ok": false,
-  "summary": { "passed": 22, "failed": 2, "total": 24 },
-  "checks": [
-    {
-      "category": "trigger",
-      "name": "trg_enforce_ccp3",
-      "expected": "t_handling_units",
-      "ok": true,
-      "detail": "OK"
-    },
-    {
-      "category": "fk",
-      "name": "t_production_orders.supervisor_id",
-      "expected": "t_employees(id)",
-      "ok": true,
-      "detail": "references t_employees(id)"
-    },
-    {
-      "category": "generated",
-      "name": "t_warehouse_movements.ccp1_passed",
-      "ok": true,
-      "detail": "GENERATED ALWAYS"
-    },
-    {
-      "category": "check",
-      "name": "t_production_logs_process_stage_check",
-      "ok": true,
-      "detail": "contains: Stacking, ShockFreezing, Freezing"
-    }
-  ]
+```sql
+WITH dups AS (
+  SELECT c.relname AS tbl, p.proname AS fn, array_agg(t.tgname) AS names, count(*) AS n
+  FROM pg_trigger t
+  JOIN pg_class c ON c.oid = t.tgrelid
+  JOIN pg_proc  p ON p.oid = t.tgfoid
+  WHERE NOT t.tgisinternal AND c.relnamespace = 'public'::regnamespace
+  GROUP BY c.relname, p.proname
+  HAVING count(*) > 1
+)
+```
+
+Każdy znaleziony duplikat → check `ok=false`, `severity='CRITICAL'`, `name='duplicate on <tbl> calling <fn>'`, `detail='Found N duplicates: <names>'`. Jeśli brak duplikatów → jeden zielony check `'no duplicate triggers'` (żeby UI zawsze pokazywało stan kategorii).
+
+### 2. Migracja SQL — self-validation w `audit_e2e_flow`
+
+Na końcu funkcji `audit_e2e_flow(p_temp)`, przed `RETURN`:
+
+```sql
+v_health := public.check_database_integrity();
+-- doklej do final jsonb_build_object:
+'database_health', v_health
+```
+
+Bez zmiany sygnatury — dodatkowe pole w zwracanym JSON.
+
+### 3. Komponent `DatabaseHealthCheck.tsx` — rozszerzenia UI
+
+- **Czerwony banner u góry** z liczbą CRITICAL fails (jeśli > 0) — szybka detekcja katastrofy.
+- **Kropki severity** w wierszach: `CRITICAL=red`, `HIGH=orange`, `MEDIUM=amber`, `LOW=gray`. Zielona kropka gdy `ok=true` niezależnie od severity.
+- Nowa sekcja **"Duplikaty triggerów"** w grupowaniu po kategorii (renderer już iteruje po `category` — wystarczy dorzucić tłumaczenie etykiety).
+- **Auto-collapse** kategorii kiedy 100% checków ok.
+- **Toast.error** przy załadowaniu z `ok=false` z liczbą failów (już zapewne jest — zweryfikować i upewnić się że pokazuje severity breakdown).
+- Zachować przycisk "Sprawdź ponownie" + relative time ostatniego sprawdzenia.
+
+### 4. `App.tsx` — `<DevHealthCheck />` w dev mode
+
+Dodać mały komponent inline (lub w `src/components/dev/DevHealthCheck.tsx`):
+
+```tsx
+function DevHealthCheck() {
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    supabase.rpc('check_database_integrity').then(({ data, error }) => {
+      if (error) { console.error('DB health check error:', error); return; }
+      const s = (data as any)?.summary;
+      if (!(data as any)?.ok) {
+        console.warn('⚠️ Database health check failed:', s, '— open /dev-tools');
+      } else {
+        console.log('✓ Database health check:', s);
+      }
+    });
+  }, []);
+  return null;
 }
 ```
 
-## Implementacja
+Zamontować w `App.tsx` raz, zaraz po `<TooltipProvider>`. Jednorazowy fire-and-forget — nie wpływa na render.
 
-### Krok 1 — migracja SQL
-Nowa migracja tworzy `public.check_database_integrity() RETURNS jsonb`:
-- `SECURITY DEFINER`, `SET search_path = public, pg_catalog`
-- Buduje array `checks` przez `jsonb_build_array(...)` z 4 sekcji
-- Każda sekcja używa `EXISTS` lub `LEFT JOIN` na `pg_trigger`/`pg_constraint`/`information_schema.columns`
-- Liczy `passed/failed/total` na końcu
+## Szczegóły techniczne
 
-### Krok 2 — komponent React
-`src/components/dev/DatabaseHealthCheck.tsx`:
-- `useQuery` z `queryKey: ['db-health']`, wywołuje `supabase.rpc('check_database_integrity')`
-- Auto-uruchomienie: query odpala się przy mount (`enabled: true` domyślnie)
-- Layout identyczny do `DemoReadinessChecklist`:
-  - Card z tytułem + Badge `passed/total` + przycisk "Sprawdź ponownie"
-  - Lista grupowana po `category` (Triggery / Klucze obce / Generated / CHECK)
-  - Każdy check: zielona/czerwona kropka + nazwa + `Collapsible` z `detail`
-  - Kategoria zwija się gdy wszystkie OK; auto-rozwija gdy są błędy
-- Toast `toast.error("Wykryto N problemów ze schematem")` jeśli `ok=false`
+- Migracja SQL: jedna nowa migracja zastępująca `check_database_integrity()` (CREATE OR REPLACE) i `audit_e2e_flow()` (CREATE OR REPLACE — bez DROP, sygnatura niezmieniona).
+- Wszystkie checki budowane przez `jsonb_agg` z UNION dla brakujących kategorii (gwarancja zwrotu wpisu nawet przy zerowym wyniku).
+- Severity mapowanie wytrzyma rozbudowę — kolejne triggery dorzucamy do tej samej VALUES tabeli.
+- UI: brak nowych zależności, używamy istniejących `Card`, `Collapsible`, `Badge` (shadcn).
+- Brak nowych RLS — RPC są SECURITY DEFINER, dostępne anon (publiczny system).
 
-### Krok 3 — wpięcie do DevTools
-`src/pages/dev/DevToolsPage.tsx`:
-- Import `DatabaseHealthCheck`
-- Renderuj zaraz pod `<DemoReadinessChecklist />` (linia 153)
+## Acceptance criteria
 
-### Krok 4 — TypeScript types
-`src/integrations/supabase/types.ts` zostanie wygenerowane automatycznie po migracji (RPC `check_database_integrity` pojawi się w `Functions`).
+1. `SELECT public.check_database_integrity()` zwraca jsonb z `summary {passed, failed, total}` i każdym checkiem zawierającym `severity`.
+2. Wszystkie checki w aktualnej bazie (po Loop #2) → zielone, w tym kategoria `duplicates` (1 zielony check „no duplicate triggers").
+3. `SELECT public.audit_e2e_flow(2.0)` zwraca pole `database_health` z pełnym wynikiem.
+4. `/dev-tools` pokazuje kategorie z kolorowymi kropkami severity, banner CRITICAL ukryty (bo wszystko zielone).
+5. W trybie dev konsola na starcie pokazuje `✓ Database health check: { passed: 26, failed: 0, total: 26 }`.
 
-## Pliki do utworzenia/edycji
-1. `supabase/migrations/<timestamp>_check_database_integrity.sql` — nowa funkcja RPC
-2. `src/components/dev/DatabaseHealthCheck.tsx` — nowy komponent
-3. `src/pages/dev/DevToolsPage.tsx` — dodanie sekcji (1 import + 1 linia JSX)
+## Test regresji ręczny
 
-## Kryteria akceptacji
-- `/dev-tools` wyświetla sekcję "Database health check" z liczbą `passed/total`
-- Auto-check przy mount (bez kliknięcia)
-- Wszystkie 4 kategorie widoczne (Triggery, FK, Generated, CHECK)
-- Klik w wiersz → szczegóły (`Collapsible`)
-- Przycisk "Sprawdź ponownie" odświeża query
-- Po obecnym stanie bazy (po pętli audytów #2) → wszystkie zielone
-
-## Pamięć
-Zaktualizuję `mem://index.md` o nowy wpis `[Database Health Check](mem://features/database-health-check)` z opisem RPC i jej zasięgu.
+- `DROP TRIGGER trg_enforce_ccp3 ON t_handling_units` → refetch → 1 czerwony check (CRITICAL), banner widoczny, console.warn w dev.
+- `CREATE TRIGGER trg_dup_ccp3 BEFORE UPDATE ON t_handling_units FOR EACH ROW EXECUTE FUNCTION enforce_ccp3()` → refetch → kategoria `duplicates` pokazuje 1 czerwony.
+- `SELECT public.audit_e2e_flow(2.0)` → `database_health.ok = false` propaguje się przez audit.

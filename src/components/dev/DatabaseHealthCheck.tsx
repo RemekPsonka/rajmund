@@ -10,6 +10,8 @@ import {
   KeyRound,
   Sparkles,
   ShieldCheck,
+  Copy,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -29,10 +31,12 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
-type Category = "trigger" | "fk" | "generated" | "check";
+type Category = "trigger" | "duplicates" | "fk" | "generated" | "check";
+type Severity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
 
 interface Check {
   category: Category;
+  severity?: Severity;
   name: string;
   expected: string;
   ok: boolean;
@@ -46,6 +50,8 @@ interface IntegrityResult {
   checked_at: string;
 }
 
+const CATEGORY_ORDER: Category[] = ["trigger", "duplicates", "fk", "generated", "check"];
+
 const CATEGORY_META: Record<
   Category,
   { label: string; icon: typeof Database; description: string }
@@ -54,6 +60,11 @@ const CATEGORY_META: Record<
     label: "Triggery",
     icon: Sparkles,
     description: "Triggery wymagane dla integralności biznesowej (CCP, lineage, agregaty).",
+  },
+  duplicates: {
+    label: "Duplikaty triggerów",
+    icon: Copy,
+    description: "Wykrywa zduplikowane triggery wywołujące tę samą funkcję na tej samej tabeli.",
   },
   fk: {
     label: "Klucze obce",
@@ -72,6 +83,21 @@ const CATEGORY_META: Record<
   },
 };
 
+// Kolory kropki dla severity (gdy ok=false). Gdy ok=true → zielona.
+const SEVERITY_DOT: Record<Severity, string> = {
+  CRITICAL: "bg-red-500",
+  HIGH: "bg-orange-500",
+  MEDIUM: "bg-amber-500",
+  LOW: "bg-gray-400",
+};
+
+const SEVERITY_LABEL: Record<Severity, string> = {
+  CRITICAL: "krytyczny",
+  HIGH: "wysoki",
+  MEDIUM: "średni",
+  LOW: "niski",
+};
+
 export function DatabaseHealthCheck() {
   const [hasNotified, setHasNotified] = useState(false);
 
@@ -85,31 +111,44 @@ export function DatabaseHealthCheck() {
     staleTime: 60_000,
   });
 
-  // Auto-toast tylko raz przy pierwszym wykryciu defektów
-  useEffect(() => {
-    if (!query.data || hasNotified) return;
-    const failed = query.data.summary.failed;
-    if (failed > 0) {
-      toast.error(`Schemat bazy: ${failed} ${failed === 1 ? "problem" : "problemów"}`, {
-        description: "Sprawdź sekcję 'Database health check' w DevTools.",
-      });
-      setHasNotified(true);
-    }
-  }, [query.data, hasNotified]);
-
   const grouped = useMemo(() => {
     const empty: Record<Category, Check[]> = {
       trigger: [],
+      duplicates: [],
       fk: [],
       generated: [],
       check: [],
     };
     if (!query.data) return empty;
     for (const c of query.data.checks) {
-      empty[c.category].push(c);
+      if (empty[c.category]) empty[c.category].push(c);
     }
     return empty;
   }, [query.data]);
+
+  // Liczba CRITICAL fails (do bannera)
+  const criticalFails = useMemo(() => {
+    if (!query.data) return 0;
+    return query.data.checks.filter(
+      (c) => !c.ok && (c.severity ?? "MEDIUM") === "CRITICAL",
+    ).length;
+  }, [query.data]);
+
+  // Auto-toast przy pierwszym wykryciu defektów
+  useEffect(() => {
+    if (!query.data || hasNotified) return;
+    const failed = query.data.summary.failed;
+    if (failed > 0) {
+      toast.error(
+        `Schemat bazy: ${failed} ${failed === 1 ? "problem" : "problemów"}` +
+          (criticalFails > 0 ? ` (${criticalFails} krytyczne)` : ""),
+        {
+          description: "Sprawdź sekcję 'Database health check' w DevTools.",
+        },
+      );
+      setHasNotified(true);
+    }
+  }, [query.data, hasNotified, criticalFails]);
 
   const summary = query.data?.summary;
   const totalOk = summary?.failed === 0;
@@ -129,7 +168,7 @@ export function DatabaseHealthCheck() {
               )}
             </CardTitle>
             <CardDescription>
-              Auto-weryfikacja schematu: triggery, klucze obce, kolumny GENERATED i ograniczenia CHECK.
+              Auto-weryfikacja schematu: triggery, duplikaty, klucze obce, kolumny GENERATED i ograniczenia CHECK.
             </CardDescription>
           </div>
           <Button
@@ -163,8 +202,24 @@ export function DatabaseHealthCheck() {
           </div>
         )}
 
+        {/* CRITICAL banner */}
+        {criticalFails > 0 && (
+          <div className="rounded-md border border-red-500/50 bg-red-500/10 p-3 flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <div className="font-semibold text-red-700 dark:text-red-300">
+                Wykryto {criticalFails}{" "}
+                {criticalFails === 1 ? "krytyczny problem" : "krytyczne problemy"} schematu bazy
+              </div>
+              <div className="text-red-700/80 dark:text-red-300/80 text-xs mt-0.5">
+                Krytyczne defekty (CCP, FK, duplikaty) zagrażają integralności produkcji i traceability. Napraw przed dalszą pracą.
+              </div>
+            </div>
+          </div>
+        )}
+
         {query.data &&
-          (Object.keys(CATEGORY_META) as Category[]).map((cat) => {
+          CATEGORY_ORDER.map((cat) => {
             const meta = CATEGORY_META[cat];
             const items = grouped[cat];
             if (items.length === 0) return null;
@@ -203,38 +258,59 @@ export function DatabaseHealthCheck() {
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <div className="border-t divide-y">
-                      {items.map((c, idx) => (
-                        <Collapsible key={`${cat}-${idx}-${c.name}`}>
-                          <div
-                            className={cn(
-                              "flex items-center gap-3 px-3 py-2",
-                              !c.ok && "bg-red-500/5",
-                            )}
-                          >
-                            {c.ok ? (
-                              <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
-                            ) : (
-                              <XCircle className="h-4 w-4 text-red-500 shrink-0" />
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-mono truncate">{c.name}</div>
-                              <div className="text-xs text-muted-foreground truncate">
-                                oczekiwane: {c.expected}
+                      {items.map((c, idx) => {
+                        const sev = (c.severity ?? "MEDIUM") as Severity;
+                        return (
+                          <Collapsible key={`${cat}-${idx}-${c.name}`}>
+                            <div
+                              className={cn(
+                                "flex items-center gap-3 px-3 py-2",
+                                !c.ok && "bg-red-500/5",
+                              )}
+                            >
+                              {/* Kropka severity (lub zielony check gdy ok) */}
+                              {c.ok ? (
+                                <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+                              ) : (
+                                <span
+                                  className={cn(
+                                    "h-3 w-3 rounded-full shrink-0 ring-2 ring-background",
+                                    SEVERITY_DOT[sev],
+                                  )}
+                                  aria-label={`severity: ${SEVERITY_LABEL[sev]}`}
+                                  title={`Severity: ${SEVERITY_LABEL[sev]}`}
+                                />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-mono truncate flex items-center gap-2">
+                                  {c.name}
+                                  {!c.ok && (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[10px] uppercase tracking-wide"
+                                    >
+                                      {SEVERITY_LABEL[sev]}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="text-xs text-muted-foreground truncate">
+                                  oczekiwane: {c.expected}
+                                </div>
                               </div>
+                              <CollapsibleTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                                  <ChevronDown className="h-4 w-4" />
+                                </Button>
+                              </CollapsibleTrigger>
                             </div>
-                            <CollapsibleTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                                <ChevronDown className="h-4 w-4" />
-                              </Button>
-                            </CollapsibleTrigger>
-                          </div>
-                          <CollapsibleContent>
-                            <div className="ml-10 mb-2 mr-3 px-3 py-2 text-xs text-muted-foreground bg-muted/30 rounded-md font-mono whitespace-pre-wrap">
-                              {c.detail}
-                            </div>
-                          </CollapsibleContent>
-                        </Collapsible>
-                      ))}
+                            <CollapsibleContent>
+                              <div className="ml-10 mb-2 mr-3 px-3 py-2 text-xs text-muted-foreground bg-muted/30 rounded-md font-mono whitespace-pre-wrap">
+                                {c.detail}
+                              </div>
+                            </CollapsibleContent>
+                          </Collapsible>
+                        );
+                      })}
                     </div>
                   </CollapsibleContent>
                 </div>
