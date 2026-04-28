@@ -2111,6 +2111,7 @@ export type Database = {
       }
       seed_minimal_demo: { Args: never; Returns: Json }
       simulate_full_production_day: { Args: never; Returns: Json }
+      test_ccp3_gate: { Args: never; Returns: Json }
     }
     Enums: {
       app_role: "global_admin" | "facility_admin" | "operator" | "viewer"
